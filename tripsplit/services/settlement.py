@@ -48,8 +48,10 @@ def compute_settlement(
 ) -> dict:
     warnings = []
     totals: dict[str, dict] = {}
+    prepaid: dict[str, int] = {}
     for m in members:
-        totals[m["id"]] = {"name": m["name"], "owed": 0, "owes": 0, "net": 0, "details": []}
+        totals[m["id"]] = {"name": m["name"], "owed": 0, "owes": 0, "net": 0, "prepaid": m.get("prepaid", 0), "details": []}
+        prepaid[m["id"]] = m.get("prepaid", 0)
 
     all_member_ids = set(m["id"] for m in members)
 
@@ -93,8 +95,11 @@ def compute_settlement(
 
     balances = {}
     for mid, t in totals.items():
-        t["net"] = t["owed"] - t["owes"]
-        if t["net"] != 0 or t["owed"] > 0 or t["owes"] > 0:
+        # net = what they paid for others (owed) + prepaid - what they owe
+        t["net"] = t["owed"] + t["prepaid"] - t["owes"]
+        if t["prepaid"] > 0:
+            t["details"].append(f"已預繳：-${t['prepaid']}")
+        if t["net"] != 0 or t["owed"] > 0 or t["owes"] > 0 or t["prepaid"] > 0:
             balances[mid] = t["net"]
 
     transactions = simplify_debts(balances)

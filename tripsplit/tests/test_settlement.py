@@ -29,9 +29,9 @@ def test_simplify_debts_zero_balance_excluded():
 def test_compute_settlement_no_tags_all_participate():
     """No exclusion tags = everyone participates"""
     members = [
-        {"id": "m1", "name": "Alice", "tags": []},
-        {"id": "m2", "name": "Bob", "tags": []},
-        {"id": "m3", "name": "Carol", "tags": []},
+        {"id": "m1", "name": "Alice", "tags": [], "prepaid": 0},
+        {"id": "m2", "name": "Bob", "tags": [], "prepaid": 0},
+        {"id": "m3", "name": "Carol", "tags": [], "prepaid": 0},
     ]
     expenses = [
         {"id": "e1", "name": "民宿", "amount": 300, "payer_id": "m1", "tags": []},
@@ -47,9 +47,9 @@ def test_compute_settlement_no_tags_all_participate():
 def test_compute_settlement_blacklist_excludes_tagged():
     """Expense with exclusion tag excludes members who have that tag"""
     members = [
-        {"id": "m1", "name": "Alice", "tags": []},
-        {"id": "m2", "name": "Bob", "tags": ["不喝酒"]},
-        {"id": "m3", "name": "Carol", "tags": []},
+        {"id": "m1", "name": "Alice", "tags": [], "prepaid": 0},
+        {"id": "m2", "name": "Bob", "tags": ["不喝酒"], "prepaid": 0},
+        {"id": "m3", "name": "Carol", "tags": [], "prepaid": 0},
     ]
     expenses = [
         {"id": "e1", "name": "酒水", "amount": 200, "payer_id": "m1", "tags": ["不喝酒"]},
@@ -64,9 +64,9 @@ def test_compute_settlement_blacklist_excludes_tagged():
 def test_compute_settlement_floor_remainder():
     """floor(100/3)=33, remainder 1 absorbed by payer"""
     members = [
-        {"id": "m1", "name": "Alice", "tags": []},
-        {"id": "m2", "name": "Bob", "tags": []},
-        {"id": "m3", "name": "Carol", "tags": []},
+        {"id": "m1", "name": "Alice", "tags": [], "prepaid": 0},
+        {"id": "m2", "name": "Bob", "tags": [], "prepaid": 0},
+        {"id": "m3", "name": "Carol", "tags": [], "prepaid": 0},
     ]
     expenses = [
         {"id": "e1", "name": "餐費", "amount": 100, "payer_id": "m1", "tags": []},
@@ -82,8 +82,8 @@ def test_compute_settlement_floor_remainder():
 def test_compute_settlement_multiple_expenses():
     """Multiple expenses accumulate correctly"""
     members = [
-        {"id": "m1", "name": "Alice", "tags": []},
-        {"id": "m2", "name": "Bob", "tags": ["不喝酒"]},
+        {"id": "m1", "name": "Alice", "tags": [], "prepaid": 0},
+        {"id": "m2", "name": "Bob", "tags": ["不喝酒"], "prepaid": 0},
     ]
     expenses = [
         {"id": "e1", "name": "民宿", "amount": 200, "payer_id": "m1", "tags": []},
@@ -101,7 +101,7 @@ def test_compute_settlement_multiple_expenses():
 def test_compute_settlement_all_excluded_warning():
     """If all members are excluded, skip with warning"""
     members = [
-        {"id": "m1", "name": "Alice", "tags": ["不參加"]},
+        {"id": "m1", "name": "Alice", "tags": ["不參加"], "prepaid": 0},
     ]
     expenses = [
         {"id": "e1", "name": "活動", "amount": 500, "payer_id": "m1", "tags": ["不參加"]},
@@ -129,8 +129,8 @@ def test_build_settlement_instructions():
 def test_compute_settlement_payer_excluded():
     """Payer is excluded from participants — still gets credited"""
     members = [
-        {"id": "m1", "name": "Alice", "tags": ["不喝酒"]},
-        {"id": "m2", "name": "Bob", "tags": []},
+        {"id": "m1", "name": "Alice", "tags": ["不喝酒"], "prepaid": 0},
+        {"id": "m2", "name": "Bob", "tags": [], "prepaid": 0},
     ]
     expenses = [
         {"id": "e1", "name": "酒", "amount": 100, "payer_id": "m1", "tags": ["不喝酒"]},
@@ -143,3 +143,22 @@ def test_compute_settlement_payer_excluded():
     assert result["member_totals"]["m1"]["net"] == 100
     assert result["member_totals"]["m2"]["owes"] == 100
     assert result["member_totals"]["m2"]["net"] == -100
+
+
+def test_compute_settlement_prepaid_reduces_balance():
+    """Prepaid amount reduces what a member still owes"""
+    members = [
+        {"id": "m1", "name": "Alice", "tags": [], "prepaid": 0},
+        {"id": "m2", "name": "Bob", "tags": [], "prepaid": 2300},
+    ]
+    expenses = [
+        {"id": "e1", "name": "民宿", "amount": 6000, "payer_id": "m1", "tags": []},
+    ]
+    result = compute_settlement(members, expenses)
+    # 6000/2 = 3000 each. Alice paid 6000, owes 3000, net = +3000
+    # Bob owes 3000, prepaid 2300, net = 0 + 2300 - 3000 = -700
+    assert result["member_totals"]["m1"]["net"] == 3000
+    assert result["member_totals"]["m2"]["net"] == -700
+    # Transaction: Bob pays Alice $700 (not $3000)
+    assert len(result["transactions"]) == 1
+    assert result["transactions"][0]["amount"] == 700

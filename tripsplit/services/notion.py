@@ -78,12 +78,14 @@ def _get_status(props: dict, key: str) -> str:
 
 def parse_member(page: dict) -> dict:
     props = page.get("properties", {})
+    paid_amount = _get_number(props, "已付款項")
     return {
         "id": page["id"],
         "name": _get_title(props, "姓名"),
         "payment_status": _get_status(props, "出席狀態"),
         "room": _get_select(props, "房間"),
         "tags": _get_multi_select(props, "參與標籤"),
+        "prepaid": int(paid_amount) if paid_amount else 0,
     }
 
 
