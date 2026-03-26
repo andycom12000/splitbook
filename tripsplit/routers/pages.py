@@ -127,8 +127,17 @@ def htmx_expense_form(request: Request, id: str = None):
     except Exception:
         members = []
         expense = None
-    # Get unique tags from all members
-    all_tags = sorted(set(t for m in members for t in m["tags"]))
+    # Get all exclusion tag options from Notion DB schema
+    try:
+        from notion_client import Client
+        from config import NOTION_TOKEN, NOTION_MEMBERS_DB_ID
+        notion = Client(auth=NOTION_TOKEN)
+        db = notion.databases.retrieve(database_id=NOTION_MEMBERS_DB_ID)
+        tag_prop = db["properties"].get("參與標籤", {})
+        all_tags = [opt["name"] for opt in tag_prop.get("multi_select", {}).get("options", [])]
+    except Exception:
+        # Fallback: collect from members
+        all_tags = sorted(set(t for m in members for t in m["tags"]))
     return templates.TemplateResponse("partials/expense_form.html", {
         "request": request,
         "members": members,
