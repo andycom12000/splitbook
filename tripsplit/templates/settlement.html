@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}結算 — TripSplit{% endblock %}
+
+{% block content %}
+
+<!-- Success Banner -->
+{% if written %}
+<div class="mx-4 mt-4 p-4 bg-green-900/50 border border-green-700 rounded-xl text-green-200 text-sm flex items-center gap-3">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 flex-shrink-0 text-green-400" fill="none" viewBox="0 0 24 24"
+       stroke="currentColor" stroke-width="2" aria-hidden="true">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+  <span class="font-medium">結算結果已寫回 Notion！</span>
+</div>
+{% endif %}
+
+<!-- Page Header -->
+<div class="mx-4 mt-4">
+  <h1 class="text-xl font-bold text-txt-primary">結算總覽</h1>
+  <p class="text-sm text-txt-muted mt-0.5">計算每位成員應付／應收金額，並寫回 Notion</p>
+</div>
+
+<!-- Empty state / trigger section -->
+<div class="mx-4 mt-6">
+  <div class="bg-bg-card border border-border-def rounded-xl p-6 flex flex-col items-center text-center gap-4">
+    <!-- Icon -->
+    <div class="w-14 h-14 rounded-2xl bg-bg-base border border-border-def flex items-center justify-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-txt-muted" fill="none" viewBox="0 0 24 24"
+           stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </div>
+
+    <div>
+      <p class="text-txt-secondary font-medium">點擊下方按鈕執行結算</p>
+      <p class="text-txt-muted text-sm mt-0.5">系統將依帳目資料計算轉帳清單</p>
+    </div>
+
+    <!-- Settle button with htmx -->
+    <button
+      hx-post="/api/settle"
+      hx-target="#settlement-results"
+      hx-swap="innerHTML"
+      hx-indicator="#settle-loading"
+      class="btn btn-primary w-full max-w-xs">
+      執行結算
+    </button>
+
+    <!-- Loading indicator (hidden by default, shown by htmx) -->
+    <div id="settle-loading" class="htmx-indicator flex items-center gap-2 text-sm text-txt-muted">
+      <span class="loading-spinner" style="width:18px;height:18px;border-width:2px;"></span>
+      計算中，請稍候...
+    </div>
+  </div>
+</div>
+
+<!-- Settlement results container — htmx renders partials/settlement_result.html here -->
+<div id="settlement-results" class="mx-4 mt-4"></div>
+
+{% endblock %}

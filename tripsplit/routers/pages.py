@@ -106,6 +106,16 @@ def expenses_page(request: Request):
     })
 
 
+@router.get("/settlement")
+def settlement_page(request: Request):
+    written = request.query_params.get("written")
+    return templates.TemplateResponse("settlement.html", {
+        "request": request,
+        "active_tab": "settlement",
+        "written": written,
+    })
+
+
 @router.get("/htmx/expense-form")
 def htmx_expense_form(request: Request, id: str = None):
     try:
