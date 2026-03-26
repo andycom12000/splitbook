@@ -66,3 +66,64 @@ def htmx_members(request: Request, filter: str = "all"):
         "request": request,
         "members": members,
     })
+
+
+@router.get("/expenses")
+def expenses_page(request: Request):
+    try:
+        from services.notion import get_all_members, get_all_expenses
+        members = get_all_members()
+        expenses = get_all_expenses()
+    except Exception as e:
+        return templates.TemplateResponse("expenses.html", {
+            "request": request, "expenses": [], "members": [], "error": str(e),
+            "active_tab": "expenses",
+        })
+
+    # Resolve payer names
+    members_by_id = {m["id"]: m for m in members}
+    for exp in expenses:
+        payer = members_by_id.get(exp["payer_id"])
+        exp["payer_name"] = payer["name"] if payer else "未知"
+        # Compute per-person split for display
+        from services.settlement import compute_settlement
+        # Simple: count members matching expense tags
+        participant_count = len(set(
+            mid for m in members for mid in [m["id"]]
+            if any(t in m["tags"] for t in exp["tags"])
+        ))
+        exp["per_person"] = exp["amount"] // participant_count if participant_count > 0 else 0
+        exp["participant_count"] = participant_count
+
+    # Sort by date descending
+    expenses.sort(key=lambda x: x.get("date", ""), reverse=True)
+
+    return templates.TemplateResponse("expenses.html", {
+        "request": request,
+        "expenses": expenses,
+        "members": members,
+        "active_tab": "expenses",
+    })
+
+
+@router.get("/htmx/expense-form")
+def htmx_expense_form(request: Request, id: str = None):
+    try:
+        from services.notion import get_all_members, get_all_expenses
+        members = get_all_members()
+        expense = None
+        if id:
+            expenses = get_all_expenses()
+            expense = next((e for e in expenses if e["id"] == id), None)
+    except Exception:
+        members = []
+        expense = None
+    # Get unique tags from all members
+    all_tags = sorted(set(t for m in members for t in m["tags"]))
+    return templates.TemplateResponse("partials/expense_form.html", {
+        "request": request,
+        "members": members,
+        "expense": expense,
+        "all_tags": all_tags,
+        "categories": ["民宿", "餐費", "保險", "酒水", "雜支"],
+    })

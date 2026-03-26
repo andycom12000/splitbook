@@ -5,3 +5,4 @@ notion-client==2.2.*
 python-dotenv==1.0.*
 httpx==0.28.*
 pytest==8.*
+python-multipart==0.0.*
