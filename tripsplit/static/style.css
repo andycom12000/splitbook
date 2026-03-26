@@ -199,7 +199,7 @@ textarea {
   justify-content: center;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
   .modal-backdrop {
     align-items: center;
   }
@@ -227,4 +227,64 @@ textarea {
   background-color: #34D399;
   border-radius: 9999px;
   transition: width 0.4s ease;
+}
+
+/* ── Sidebar nav links (desktop) ─────────────────────────── */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #94A3B8;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #F8FAFC;
+}
+
+.nav-link.active {
+  background-color: rgba(37, 99, 235, 0.1);
+  color: #2563EB;
+  font-weight: 600;
+}
+
+/* ── Desktop member table ────────────────────────────────── */
+.member-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.member-table th {
+  position: sticky;
+  top: 0;
+  background-color: #1E293B;
+  z-index: 1;
+}
+
+.member-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.member-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Desktop layout adjustments ──────────────────────────── */
+@media (min-width: 1024px) {
+  .member-item {
+    border-radius: 0.75rem;
+    border: 1px solid #334155;
+    border-bottom: 1px solid #334155;
+  }
+
+  .summary-banner {
+    padding: 1.25rem 1.5rem;
+  }
 }

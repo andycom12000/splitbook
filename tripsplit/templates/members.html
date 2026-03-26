@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block page_title %}人員總覽{% endblock %}
 {% block content %}
 
 <!-- Error Alert -->
@@ -9,8 +10,8 @@
 {% endif %}
 
 <!-- Summary Banner -->
-<div class="summary-banner mx-4 mt-4">
-  <div class="grid grid-cols-3 gap-2 text-center mb-3">
+<div class="summary-banner mx-4 lg:mx-6 mt-4">
+  <div class="grid grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-4 text-center mb-3">
     <div>
       <div class="text-xs text-gray-400">總人數</div>
       <div class="text-xl font-bold text-white font-mono">{{ total }}</div>
@@ -23,6 +24,14 @@
       <div class="text-xs text-gray-400">總費用</div>
       <div class="text-lg font-bold text-white font-mono">${{ "{:,}".format(total_expense) }}</div>
     </div>
+    <div class="hidden lg:block">
+      <div class="text-xs text-gray-400">平均每人</div>
+      <div class="text-lg font-bold text-white font-mono">${{ "{:,}".format((total_expense // total) if total > 0 else 0) }}</div>
+    </div>
+    <div class="hidden lg:block">
+      <div class="text-xs text-gray-400">繳費率</div>
+      <div class="text-lg font-bold text-status-paid font-mono">{{ ((paid_count / total * 100) if total > 0 else 0) | round | int }}%</div>
+    </div>
   </div>
   <div class="progress-bar">
     <div class="progress-fill" style="width: {{ (paid_count / total * 100) if total > 0 else 0 }}%"></div>
@@ -34,31 +43,128 @@
 </div>
 
 <!-- Filter Chips -->
-<div class="flex gap-2 mx-4 mt-4 overflow-x-auto" style="-webkit-overflow-scrolling: touch;">
-  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer"
-    hx-get="/htmx/members?filter=all" hx-target="#member-list" hx-swap="innerHTML">
+<div class="flex gap-2 mx-4 lg:mx-6 mt-4 overflow-x-auto lg:overflow-visible" style="-webkit-overflow-scrolling: touch;">
+  <!-- Mobile: htmx partial swap / Desktop: full page reload for filter -->
+  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer hover:bg-white/[0.06] transition-colors
+                 lg:hidden"
+    hx-get="/htmx/members?filter=all" hx-target="#member-list-mobile" hx-swap="innerHTML">
     全部 ({{ total }})
   </button>
-  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer"
-    hx-get="/htmx/members?filter=unpaid" hx-target="#member-list" hx-swap="innerHTML">
+  <a href="/?filter=all" class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer hover:bg-white/[0.06] transition-colors
+                 hidden lg:inline-flex no-underline">
+    全部 ({{ total }})
+  </a>
+  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer hover:bg-white/[0.06] transition-colors
+                 lg:hidden"
+    hx-get="/htmx/members?filter=unpaid" hx-target="#member-list-mobile" hx-swap="innerHTML">
     未繳 ({{ total - paid_count }})
   </button>
-  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer"
-    hx-get="/htmx/members?filter=paid" hx-target="#member-list" hx-swap="innerHTML">
+  <a href="/?filter=unpaid" class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer hover:bg-white/[0.06] transition-colors
+                 hidden lg:inline-flex no-underline">
+    未繳 ({{ total - paid_count }})
+  </a>
+  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer hover:bg-white/[0.06] transition-colors
+                 lg:hidden"
+    hx-get="/htmx/members?filter=paid" hx-target="#member-list-mobile" hx-swap="innerHTML">
     已繳 ({{ paid_count }})
   </button>
+  <a href="/?filter=paid" class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer hover:bg-white/[0.06] transition-colors
+                 hidden lg:inline-flex no-underline">
+    已繳 ({{ paid_count }})
+  </a>
 </div>
 
-<!-- Member List -->
-<div id="member-list" class="px-4 mt-4 space-y-3 pb-4">
+<!-- ══ Desktop Table View (≥1024px) ══ -->
+<div class="hidden lg:block mt-4 px-6 pb-4">
+  {% if not members %}
+  <div class="text-center py-12 text-gray-500">
+    <p class="text-lg mb-2">Notion 資料庫中尚無人員資料</p>
+  </div>
+  {% else %}
+  <div class="bg-bg-card border border-border-def rounded-xl overflow-clip">
+    <table class="member-table w-full text-sm">
+      <thead>
+        <tr class="border-b border-border-def text-left text-xs text-txt-muted uppercase tracking-wider">
+          <th class="px-4 py-3 font-medium">成員</th>
+          <th class="px-4 py-3 font-medium">房間</th>
+          <th class="px-4 py-3 font-medium">標籤</th>
+          <th class="px-4 py-3 font-medium text-right">已繳款項</th>
+          <th class="px-4 py-3 font-medium text-right">代墊費用</th>
+          <th class="px-4 py-3 font-medium text-right">應付份額</th>
+          <th class="px-4 py-3 font-medium text-right">淨餘額</th>
+          <th class="px-4 py-3 font-medium text-center">狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+        <tr class="border-b border-border-def/50 last:border-b-0">
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2.5">
+              <div class="avatar" style="width:32px;height:32px;font-size:0.75rem;background:hsl({{ loop.index0 * 47 % 360 }},60%,50%)">
+                {{ m.name[0] }}
+              </div>
+              <span class="font-medium text-txt-primary">{{ m.name }}</span>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-txt-muted">{{ m.room }}</td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1">
+              {% for tag in m.tags %}
+              <span class="tag tag-group">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td class="px-4 py-3 text-right">
+            {% if m.prepaid > 0 %}
+            <span class="font-mono text-amt-positive">${{ "{:,}".format(m.prepaid) }}</span>
+            {% else %}
+            <span class="font-mono text-txt-muted">-</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-right">
+            {% if m.owed > 0 %}
+            <span class="font-mono text-amt-positive">${{ "{:,}".format(m.owed) }}</span>
+            {% else %}
+            <span class="font-mono text-txt-muted">-</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-right">
+            <span class="font-mono text-txt-primary">${{ "{:,}".format(m.owes) }}</span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            {% if m.net >= 0 %}
+            <span class="font-mono font-semibold text-amt-positive">+${{ "{:,}".format(m.net) }}</span>
+            {% else %}
+            <span class="font-mono font-semibold text-amt-negative">-${{ "{:,}".format(m.net|abs) }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-center">
+            {% if m.payment_status == "已繳" %}
+            <span class="tag tag-paid">已繳</span>
+            {% elif m.payment_status == "部分繳" %}
+            <span class="tag tag-partial">部分繳</span>
+            {% else %}
+            <span class="tag tag-unpaid">未繳</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══ Mobile Card View (<1024px) ══ -->
+<div id="member-list-mobile" class="lg:hidden px-4 mt-4 space-y-3 pb-4">
   {% if not members %}
   <div class="text-center py-12 text-gray-500">
     <p class="text-lg mb-2">Notion 資料庫中尚無人員資料</p>
   </div>
   {% else %}
     {% for m in members %}
-    <div class="member-item">
-      <div class="flex justify-between items-center mb-2">
+    <div class="member-item flex-col rounded-xl border border-border-def">
+      <div class="flex justify-between items-center mb-2 w-full">
         <div class="flex items-center gap-3">
           <div class="avatar" style="background: hsl({{ loop.index0 * 47 % 360 }}, 60%, 50%)">
             {{ m.name[0] }}
@@ -76,12 +182,12 @@
         <span class="tag tag-unpaid">未繳</span>
         {% endif %}
       </div>
-      <div class="flex flex-wrap gap-1 mb-2">
+      <div class="flex flex-wrap gap-1 mb-2 w-full">
         {% for tag in m.tags %}
         <span class="tag tag-group">{{ tag }}</span>
         {% endfor %}
       </div>
-      <div class="border-t border-gray-700 pt-2 mt-2">
+      <div class="border-t border-gray-700 pt-2 mt-2 w-full">
         {% if m.prepaid > 0 %}
         <div class="flex justify-between text-xs">
           <span class="text-gray-500">已繳款項</span>

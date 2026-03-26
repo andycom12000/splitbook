@@ -5,7 +5,7 @@ router = APIRouter()
 
 
 @router.get("/")
-def members_page(request: Request):
+def members_page(request: Request, filter: str = "all"):
     try:
         from services.notion import get_all_members, get_all_expenses
         from services.settlement import compute_settlement
@@ -37,15 +37,23 @@ def members_page(request: Request):
     needs_payment = [m for m in members if m["payment_status"] != "已繳"]
     paid = [m for m in members if m["payment_status"] == "已繳"]
     total_expense = sum(e["amount"] for e in expenses) if expenses else 0
+    total_count = len(members)
+    paid_count = len(paid)
+
+    # Apply filter for full-page requests (desktop filter links)
+    if filter == "unpaid":
+        members = needs_payment
+    elif filter == "paid":
+        members = paid
 
     return templates.TemplateResponse("members.html", {
         "request": request,
         "members": members,
         "needs_payment": needs_payment,
         "paid": paid,
-        "total": len(members),
+        "total": total_count,
         "total_expense": total_expense,
-        "paid_count": len(paid),
+        "paid_count": paid_count,
         "expense_count": len(expenses) if expenses else 0,
         "active_tab": "members",
     })

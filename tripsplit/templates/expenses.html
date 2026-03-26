@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}帳目 — TripSplit{% endblock %}
+{% block page_title %}帳目管理{% endblock %}
 
 {% block header_actions %}
 <button
@@ -28,8 +29,9 @@
 
 <!-- Summary Banner -->
 {% if expenses %}
-<div class="mx-4 mt-4 px-4 py-3 bg-bg-card border border-border-def rounded-xl">
-  <div class="grid grid-cols-2 gap-4 text-center">
+{% set total_amount = expenses | sum(attribute='amount') %}
+<div class="mx-4 lg:mx-6 mt-4 px-4 py-3 bg-bg-card border border-border-def rounded-xl">
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
     <div>
       <div class="text-xs text-txt-muted mb-0.5">帳目總數</div>
       <div class="text-2xl font-bold font-mono text-txt-primary">{{ expenses | length }}</div>
@@ -37,7 +39,19 @@
     <div>
       <div class="text-xs text-txt-muted mb-0.5">總費用</div>
       <div class="text-2xl font-bold font-mono text-amt-positive">
-        ${{ "{:,}".format(expenses | sum(attribute='amount')) }}
+        ${{ "{:,}".format(total_amount) }}
+      </div>
+    </div>
+    <div class="hidden lg:block">
+      <div class="text-xs text-txt-muted mb-0.5">最大單筆</div>
+      <div class="text-2xl font-bold font-mono text-txt-primary">
+        ${{ "{:,}".format(expenses | map(attribute='amount') | max) }}
+      </div>
+    </div>
+    <div class="hidden lg:block">
+      <div class="text-xs text-txt-muted mb-0.5">平均每筆</div>
+      <div class="text-2xl font-bold font-mono text-txt-primary">
+        ${{ "{:,}".format((total_amount // (expenses | length)) if expenses else 0) }}
       </div>
     </div>
   </div>
@@ -45,7 +59,7 @@
 {% endif %}
 
 <!-- Expense List -->
-<div class="px-4 mt-4 space-y-3 pb-4">
+<div class="px-4 lg:px-6 mt-4 pb-4">
 
   {% if not expenses %}
   <!-- Empty State -->
@@ -64,12 +78,13 @@
       hx-target="#modal-container"
       hx-swap="innerHTML"
       class="px-5 py-2.5 rounded-xl bg-accent-blue text-white text-sm font-semibold
-             active:bg-blue-700 transition-colors duration-150">
+             hover:bg-blue-500 active:bg-blue-700 transition-colors duration-150">
       新增第一筆帳目
     </button>
   </div>
 
   {% else %}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
   {% set category_colors = {
     "民宿": ("bg-blue-900/60 text-blue-300", "宿"),
@@ -81,7 +96,7 @@
 
   {% for exp in expenses %}
   {% set cat_style = category_colors.get(exp.category, ("bg-gray-700/60 text-gray-300", exp.category[0] if exp.category else "?")) %}
-  <div class="bg-bg-card border border-border-def rounded-xl p-4">
+  <div class="bg-bg-card border border-border-def rounded-xl p-4 hover:border-txt-muted/30 transition-colors duration-150">
 
     <!-- Top row: icon + name + amount -->
     <div class="flex items-start gap-3">
@@ -160,6 +175,7 @@
 
   </div>
   {% endfor %}
+  </div><!-- /grid -->
 
   {% endif %}
 </div>
