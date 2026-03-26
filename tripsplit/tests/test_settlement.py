@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.settlement import compute_settlement, simplify_debts
+from services.settlement import compute_settlement, simplify_debts, build_settlement_instructions
 
 
 def test_simplify_debts_basic():
@@ -99,3 +99,42 @@ def test_compute_settlement_zero_participants_warning():
     result = compute_settlement(members, expenses)
     assert len(result["warnings"]) > 0
     assert "VIP" in result["warnings"][0]
+
+
+def test_build_settlement_instructions():
+    transactions = [
+        {"from": "m1", "to": "m2", "amount": 100, "from_name": "Alice", "to_name": "Bob"},
+        {"from": "m3", "to": "m2", "amount": 50, "from_name": "Carol", "to_name": "Bob"},
+    ]
+    # m1 owes
+    result = build_settlement_instructions("m1", transactions)
+    assert "轉 $100 給 Bob" in result
+
+    # m2 is owed
+    result = build_settlement_instructions("m2", transactions)
+    assert "收 $100 從 Alice" in result
+    assert "收 $50 從 Carol" in result
+
+    # m4 not involved
+    result = build_settlement_instructions("m4", transactions)
+    assert result == "已結清"
+
+
+def test_compute_settlement_payer_not_participant():
+    """Payer not in participant group — remainder assigned to first participant"""
+    members = [
+        {"id": "m1", "name": "Alice", "tags": ["全程"]},
+        {"id": "m2", "name": "Bob", "tags": ["酒水"]},
+    ]
+    expenses = [
+        {"id": "e1", "name": "酒", "amount": 100, "payer_id": "m1", "tags": ["酒水"]},
+    ]
+    result = compute_settlement(members, expenses)
+    # Only Bob has 酒水 tag, Alice paid but is not a participant
+    # Bob owes 100 (100/1=100, no remainder since N=1)
+    # Alice is owed 100
+    assert result["member_totals"]["m1"]["owed"] == 100
+    assert result["member_totals"]["m1"]["owes"] == 0
+    assert result["member_totals"]["m1"]["net"] == 100
+    assert result["member_totals"]["m2"]["owes"] == 100
+    assert result["member_totals"]["m2"]["net"] == -100

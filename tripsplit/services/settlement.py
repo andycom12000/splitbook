@@ -1,5 +1,3 @@
-from math import floor
-
 
 def simplify_debts(balances: dict[str, int]) -> list[dict]:
     """Minimize transactions to settle all debts. All amounts are integer TWD."""
@@ -68,15 +66,16 @@ def compute_settlement(
             continue
 
         n = len(participant_ids)
-        per_person = floor(exp["amount"] / n)
+        per_person = exp["amount"] // n
         remainder = exp["amount"] - per_person * n
 
         payer_id = exp["payer_id"]
         if payer_id in totals:
             totals[payer_id]["owed"] += exp["amount"]
 
+        remainder_target = payer_id if payer_id in participant_ids else sorted(participant_ids)[0]
         for pid in participant_ids:
-            share = per_person + (remainder if pid == payer_id else 0)
+            share = per_person + (remainder if pid == remainder_target else 0)
             if pid in totals:
                 totals[pid]["owes"] += share
                 totals[pid]["details"].append(
