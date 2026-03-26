@@ -9,7 +9,7 @@ def _parse_expense_form(
     category: str = Form(...),
     amount: int = Form(..., gt=0),
     payer_id: str = Form(...),
-    tags: list[str] = Form(...),
+    tags: list[str] = Form([]),
     date: str = Form(""),
     note: str = Form(""),
 ) -> dict:
