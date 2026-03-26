@@ -39,7 +39,7 @@
   <!-- Form -->
   <form method="POST"
         action="{% if expense %}/api/expenses/{{ expense.id }}/update{% else %}/api/expenses{% endif %}"
-        class="px-5 pt-4 pb-8 space-y-5">
+        class="px-5 pt-4 pb-24 space-y-5">
 
     <!-- 項目名稱 -->
     <div>
@@ -130,10 +130,11 @@
                  focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue
                  transition-colors duration-150 pr-9"
         >
-          <option value="" disabled {% if not expense %}selected{% endif %}>請選擇付款人</option>
           {% for m in members %}
           <option value="{{ m.id }}"
-            {% if expense and expense.payer_id == m.id %}selected{% endif %}>
+            {% if expense and expense.payer_id == m.id %}selected
+            {% elif not expense and m.name == '菸齡' %}selected
+            {% endif %}>
             {{ m.name }}
           </option>
           {% endfor %}
