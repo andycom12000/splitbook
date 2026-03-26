@@ -81,18 +81,23 @@
         <span class="tag tag-group">{{ tag }}</span>
         {% endfor %}
       </div>
-      {% if m.owes > 0 or m.owed > 0 %}
       <div class="border-t border-gray-700 pt-2 mt-2">
+        {% if m.prepaid > 0 %}
         <div class="flex justify-between text-xs">
-          <span class="text-gray-500">應付</span>
-          <span class="amount">${{ "{:,}".format(m.owes) }}</span>
+          <span class="text-gray-500">已繳款項</span>
+          <span class="amount amount-positive">${{ "{:,}".format(m.prepaid) }}</span>
         </div>
+        {% endif %}
         {% if m.owed > 0 %}
         <div class="flex justify-between text-xs">
-          <span class="text-gray-500">已代墊</span>
+          <span class="text-gray-500">代墊費用</span>
           <span class="amount amount-positive">${{ "{:,}".format(m.owed) }}</span>
         </div>
         {% endif %}
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500">應付份額</span>
+          <span class="amount">${{ "{:,}".format(m.owes) }}</span>
+        </div>
         <div class="flex justify-between text-sm font-semibold mt-1">
           <span class="text-gray-400">淨餘額</span>
           {% if m.net >= 0 %}
@@ -102,7 +107,6 @@
           {% endif %}
         </div>
       </div>
-      {% endif %}
     </div>
     {% endfor %}
   {% endif %}
