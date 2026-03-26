@@ -68,13 +68,21 @@ def _get_date(props: dict, key: str) -> str:
 # Parsers (pure functions — no Notion client dependency)
 # ---------------------------------------------------------------------------
 
+def _get_status(props: dict, key: str) -> str:
+    """Get value from a Notion 'status' type property."""
+    try:
+        return props[key]["status"]["name"]
+    except (KeyError, TypeError):
+        return ""
+
+
 def parse_member(page: dict) -> dict:
     props = page.get("properties", {})
     return {
         "id": page["id"],
-        "name": _get_title(props, "名字"),
-        "payment_status": _get_select(props, "繳費狀態"),
-        "room": _get_rich_text(props, "分房"),
+        "name": _get_title(props, "姓名"),
+        "payment_status": _get_status(props, "出席狀態"),
+        "room": _get_select(props, "房間"),
         "tags": _get_multi_select(props, "參與標籤"),
     }
 
@@ -122,41 +130,23 @@ def build_member_update(
 # API calls
 # ---------------------------------------------------------------------------
 
-def get_all_members(members_db_id: str) -> list[dict]:
+def get_all_members() -> list[dict]:
+    from config import NOTION_MEMBERS_DB_ID
     notion = _get_client()
-    results = []
-    cursor = None
-    while True:
-        kwargs = {"database_id": members_db_id, "page_size": 100}
-        if cursor:
-            kwargs["start_cursor"] = cursor
-        response = notion.databases.query(**kwargs)
-        for page in response["results"]:
-            results.append(parse_member(page))
-        if not response.get("has_more"):
-            break
-        cursor = response["next_cursor"]
-    return results
+    response = notion.databases.query(database_id=NOTION_MEMBERS_DB_ID)
+    return [parse_member(page) for page in response["results"]]
 
 
-def get_all_expenses(expenses_db_id: str) -> list[dict]:
+def get_all_expenses() -> list[dict]:
+    from config import NOTION_EXPENSES_DB_ID
     notion = _get_client()
-    results = []
-    cursor = None
-    while True:
-        kwargs = {"database_id": expenses_db_id, "page_size": 100}
-        if cursor:
-            kwargs["start_cursor"] = cursor
-        response = notion.databases.query(**kwargs)
-        for page in response["results"]:
-            results.append(parse_expense(page))
-        if not response.get("has_more"):
-            break
-        cursor = response["next_cursor"]
-    return results
+    response = notion.databases.query(database_id=NOTION_EXPENSES_DB_ID)
+    return [parse_expense(page) for page in response["results"]]
 
 
-def create_expense(expenses_db_id: str, data: dict) -> dict:
+def create_expense(data: dict) -> dict:
+    from config import NOTION_EXPENSES_DB_ID
+    expenses_db_id = NOTION_EXPENSES_DB_ID
     notion = _get_client()
     properties = {
         "項目名稱": {"title": [{"type": "text", "text": {"content": data["name"]}}]},
@@ -210,21 +200,27 @@ def delete_expense(page_id: str) -> None:
     notion.pages.update(page_id=page_id, archived=True)
 
 
-def write_settlement_batch(member_updates: list[dict]) -> None:
+def write_settlement_batch(member_updates: list[dict]) -> dict:
     """
-    Apply settlement results to all member pages in Notion.
-
-    Each item in member_updates must have:
-        page_id, total_owes, total_paid, net,
-        settlement_instruction, details
+    Write settlement results to all member pages in Notion.
+    member_updates: [{"page_id": str, "properties": dict}]
+    Returns: {"success": [page_id], "failed": [page_id]}
     """
+    import time
     notion = _get_client()
+    success = []
+    failed = []
     for item in member_updates:
-        properties = build_member_update(
-            total_owes=item["total_owes"],
-            total_paid=item["total_paid"],
-            net=item["net"],
-            settlement_instruction=item["settlement_instruction"],
-            details=item["details"],
-        )
-        notion.pages.update(page_id=item["page_id"], properties=properties)
+        retries = 0
+        while retries < 3:
+            try:
+                notion.pages.update(page_id=item["page_id"], properties=item["properties"])
+                success.append(item["page_id"])
+                break
+            except Exception:
+                retries += 1
+                time.sleep(0.5 * (2 ** retries))
+        else:
+            failed.append(item["page_id"])
+        time.sleep(0.35)
+    return {"success": success, "failed": failed}
