@@ -51,18 +51,27 @@ def compute_settlement(
     for m in members:
         totals[m["id"]] = {"name": m["name"], "owed": 0, "owes": 0, "net": 0, "details": []}
 
+    all_member_ids = set(m["id"] for m in members)
+
+    # Build exclusion index: tag -> set of member IDs who have that tag
     tag_index: dict[str, set[str]] = {}
     for m in members:
         for tag in m["tags"]:
             tag_index.setdefault(tag, set()).add(m["id"])
 
     for exp in expenses:
-        participant_ids: set[str] = set()
-        for tag in exp["tags"]:
-            participant_ids |= tag_index.get(tag, set())
+        # Blacklist mode: start with ALL members, then exclude those with matching tags
+        if exp["tags"]:
+            excluded_ids: set[str] = set()
+            for tag in exp["tags"]:
+                excluded_ids |= tag_index.get(tag, set())
+            participant_ids = all_member_ids - excluded_ids
+        else:
+            # No exclusion tags = everyone participates
+            participant_ids = set(all_member_ids)
 
         if not participant_ids:
-            warnings.append(f"帳目「{exp['name']}」的標籤匹配不到任何人，已跳過")
+            warnings.append(f"帳目「{exp['name']}」排除後無人參與，已跳過")
             continue
 
         n = len(participant_ids)

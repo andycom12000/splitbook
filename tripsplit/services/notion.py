@@ -95,7 +95,7 @@ def parse_expense(page: dict) -> dict:
         "category": _get_select(props, "類別"),
         "amount": _get_number(props, "總金額"),
         "payer_id": _get_relation_first(props, "付款人"),
-        "tags": _get_multi_select(props, "參與標籤"),
+        "tags": _get_multi_select(props, "排除標籤"),
         "date": _get_date(props, "日期"),
         "note": _get_rich_text(props, "備註"),
     }
@@ -155,7 +155,7 @@ def create_expense(data: dict) -> dict:
         "類別": {"select": {"name": data["category"]}},
         "總金額": {"number": data["amount"]},
         "付款人": {"relation": [{"id": data["payer_id"]}]},
-        "參與標籤": {"multi_select": [{"name": t} for t in data.get("tags", [])]},
+        "排除標籤": {"multi_select": [{"name": t} for t in data.get("tags", [])]},
     }
     if data.get("date"):
         properties["日期"] = {"date": {"start": data["date"]}}
@@ -184,7 +184,7 @@ def update_expense(page_id: str, data: dict) -> dict:
     if "payer_id" in data:
         properties["付款人"] = {"relation": [{"id": data["payer_id"]}]}
     if "tags" in data:
-        properties["參與標籤"] = {
+        properties["排除標籤"] = {
             "multi_select": [{"name": t} for t in data["tags"]]
         }
     if "date" in data:

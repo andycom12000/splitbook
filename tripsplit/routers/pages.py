@@ -85,13 +85,12 @@ def expenses_page(request: Request):
     for exp in expenses:
         payer = members_by_id.get(exp["payer_id"])
         exp["payer_name"] = payer["name"] if payer else "未知"
-        # Compute per-person split for display
-        from services.settlement import compute_settlement
-        # Simple: count members matching expense tags
-        participant_count = len(set(
-            mid for m in members for mid in [m["id"]]
-            if any(t in m["tags"] for t in exp["tags"])
-        ))
+        # Compute per-person split (blacklist mode: all members minus excluded)
+        if exp["tags"]:
+            excluded = set(m["id"] for m in members if any(t in m["tags"] for t in exp["tags"]))
+            participant_count = len(members) - len(excluded)
+        else:
+            participant_count = len(members)
         exp["per_person"] = exp["amount"] // participant_count if participant_count > 0 else 0
         exp["participant_count"] = participant_count
 
