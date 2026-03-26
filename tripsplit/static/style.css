@@ -161,6 +161,18 @@
   color: #F8FAFC;
 }
 
+/* ── Form input touch targets ────────────────────────────── */
+/* Ensure all form controls meet the 44px minimum touch target */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+  min-height: 44px;
+}
+
 /* ── Loading spinner (CSS-only) ──────────────────────────── */
 @keyframes spin {
   to { transform: rotate(360deg); }
