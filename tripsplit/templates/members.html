@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Error Alert -->
+{% if error %}
+<div class="mx-4 mt-4 p-4 bg-red-900/50 border border-red-700 rounded-xl text-red-200 text-sm">
+  Notion 連線錯誤：{{ error }}
+</div>
+{% endif %}
+
+<!-- Summary Banner -->
+<div class="summary-banner mx-4 mt-4">
+  <div class="grid grid-cols-3 gap-2 text-center mb-3">
+    <div>
+      <div class="text-xs text-gray-400">總人數</div>
+      <div class="text-xl font-bold text-white font-mono">{{ total }}</div>
+    </div>
+    <div>
+      <div class="text-xs text-gray-400">帳目</div>
+      <div class="text-xl font-bold text-white font-mono">{{ expense_count }}</div>
+    </div>
+    <div>
+      <div class="text-xs text-gray-400">總費用</div>
+      <div class="text-lg font-bold text-white font-mono">${{ "{:,}".format(total_expense) }}</div>
+    </div>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: {{ (paid_count / total * 100) if total > 0 else 0 }}%"></div>
+  </div>
+  <div class="flex justify-between mt-1 text-xs text-gray-400">
+    <span>繳費進度</span>
+    <span><span class="text-emerald-400">{{ paid_count }}</span> 已繳 / <span class="text-orange-400">{{ total - paid_count }}</span> 未繳</span>
+  </div>
+</div>
+
+<!-- Filter Chips -->
+<div class="flex gap-2 mx-4 mt-4 overflow-x-auto" style="-webkit-overflow-scrolling: touch;">
+  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer"
+    hx-get="/htmx/members?filter=all" hx-target="#member-list" hx-swap="innerHTML">
+    全部 ({{ total }})
+  </button>
+  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer"
+    hx-get="/htmx/members?filter=unpaid" hx-target="#member-list" hx-swap="innerHTML">
+    未繳 ({{ total - paid_count }})
+  </button>
+  <button class="tag tag-group whitespace-nowrap px-3 py-1.5 cursor-pointer"
+    hx-get="/htmx/members?filter=paid" hx-target="#member-list" hx-swap="innerHTML">
+    已繳 ({{ paid_count }})
+  </button>
+</div>
+
+<!-- Member List -->
+<div id="member-list" class="px-4 mt-4 space-y-3 pb-4">
+  {% if not members %}
+  <div class="text-center py-12 text-gray-500">
+    <p class="text-lg mb-2">Notion 資料庫中尚無人員資料</p>
+  </div>
+  {% else %}
+    {% for m in members %}
+    <div class="member-item">
+      <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-3">
+          <div class="avatar" style="background: hsl({{ loop.index0 * 47 % 360 }}, 60%, 50%)">
+            {{ m.name[0] }}
+          </div>
+          <div>
+            <div class="text-sm font-semibold text-white">{{ m.name }}</div>
+            <div class="text-xs text-gray-500">{{ m.room }}</div>
+          </div>
+        </div>
+        {% if m.payment_status == "已繳" %}
+        <span class="tag tag-paid">已繳</span>
+        {% elif m.payment_status == "部分繳" %}
+        <span class="tag tag-partial">部分繳</span>
+        {% else %}
+        <span class="tag tag-unpaid">未繳</span>
+        {% endif %}
+      </div>
+      <div class="flex flex-wrap gap-1 mb-2">
+        {% for tag in m.tags %}
+        <span class="tag tag-group">{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% if m.owes > 0 or m.owed > 0 %}
+      <div class="border-t border-gray-700 pt-2 mt-2">
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500">應付</span>
+          <span class="amount">${{ "{:,}".format(m.owes) }}</span>
+        </div>
+        {% if m.owed > 0 %}
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500">已代墊</span>
+          <span class="amount amount-positive">${{ "{:,}".format(m.owed) }}</span>
+        </div>
+        {% endif %}
+        <div class="flex justify-between text-sm font-semibold mt-1">
+          <span class="text-gray-400">淨餘額</span>
+          {% if m.net >= 0 %}
+          <span class="amount amount-positive">+${{ "{:,}".format(m.net) }}</span>
+          {% else %}
+          <span class="amount amount-negative">-${{ "{:,}".format(m.net|abs) }}</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% endif %}
+</div>
+
+{% endblock %}
