@@ -134,7 +134,9 @@ def get_all_members() -> list[dict]:
     from config import NOTION_MEMBERS_DB_ID
     notion = _get_client()
     response = notion.databases.query(database_id=NOTION_MEMBERS_DB_ID)
-    return [parse_member(page) for page in response["results"]]
+    members = [parse_member(page) for page in response["results"]]
+    # Filter out cancelled members
+    return [m for m in members if m["payment_status"] != "已取消"]
 
 
 def get_all_expenses() -> list[dict]:
