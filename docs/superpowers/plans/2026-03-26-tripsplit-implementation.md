@@ -16,11 +16,11 @@
 
 ```
 tripsplit/
-├── main.py                     # FastAPI app entry, mount routers + static
-├── deps.py                     # Shared dependencies (Jinja2Templates instance)
+├── main.py                     # FastAPI app entry point
+├── deps.py                     # Shared dependencies (Jinja2Templates)
 ├── config.py                   # Settings from .env (NOTION_TOKEN, DB IDs)
 ├── requirements.txt            # Dependencies
-├── .env.example                # Template for environment variables
+├── .env.example                # Environment variable template
 │
 ├── routers/
 │   ├── pages.py                # GET /, /expenses, /settlement (SSR)
@@ -265,7 +265,7 @@ def test_compute_settlement_union_tags():
     # Only Bob and Carol have 酒水 tag -> 2 people
     assert result["member_totals"]["m2"]["owes"] == 150
     assert result["member_totals"]["m3"]["owes"] == 150
-    assert "m1" not in result["member_totals"] or result["member_totals"]["m1"]["owes"] == 0
+    assert result["member_totals"]["m1"]["owes"] == 0
 
 
 def test_compute_settlement_zero_participants_warning():
@@ -496,7 +496,7 @@ Expected: FAIL
 
 ```python
 # services/notion.py
-import asyncio
+import time
 from notion_client import Client
 from config import NOTION_TOKEN, NOTION_MEMBERS_DB_ID, NOTION_EXPENSES_DB_ID
 
@@ -603,8 +603,6 @@ def write_settlement_to_member(page_id: str, update_props: dict):
     """Write settlement results to a member's page. Call with 350ms delay between calls."""
     notion.pages.update(page_id=page_id, properties=update_props)
 
-
-import time
 
 def write_settlement_batch(member_updates: list[dict]) -> dict:
     """
@@ -745,28 +743,47 @@ git commit -m "feat: create base template with dark mode, bottom tab bar, Tailwi
 - [ ] **Step 1: Implement GET / route**
 
 ```python
+from deps import templates
+from services.notion import get_all_members, get_all_expenses
+from services.settlement import compute_settlement
+
 @router.get("/")
 def members_page(request: Request):
     try:
         members = get_all_members()
+        expenses = get_all_expenses()
     except Exception as e:
-        members = []
-        error = str(e)
-    # Group by status
-    needs_payment = [m for m in members if m.get("net", 0) < 0]
-    owed_back = [m for m in members if m.get("net", 0) > 0]
-    settled = [m for m in members if m.get("net", 0) == 0]
-    total_expense = sum(m.get("total_owes", 0) for m in members)
-    paid_count = sum(1 for m in members if m["payment_status"] == "已繳")
+        return templates.TemplateResponse("members.html", {
+            "request": request, "members": [], "error": str(e),
+            "active_tab": "members",
+        })
+
+    # Compute settlement to get net balances (if expenses exist)
+    result = compute_settlement(members, expenses) if expenses else None
+
+    # Merge settlement data into member dicts
+    if result:
+        for m in members:
+            totals = result["member_totals"].get(m["id"], {})
+            m["owes"] = totals.get("owes", 0)
+            m["owed"] = totals.get("owed", 0)
+            m["net"] = totals.get("net", 0)
+            m["details"] = totals.get("details", [])
+
+    # Group by payment status
+    needs_payment = [m for m in members if m["payment_status"] != "已繳"]
+    paid = [m for m in members if m["payment_status"] == "已繳"]
+    total_expense = sum(e["amount"] for e in expenses) if expenses else 0
+
     return templates.TemplateResponse("members.html", {
         "request": request,
         "members": members,
         "needs_payment": needs_payment,
-        "owed_back": owed_back,
-        "settled": settled,
+        "paid": paid,
         "total": len(members),
         "total_expense": total_expense,
-        "paid_count": paid_count,
+        "paid_count": len(paid),
+        "expense_count": len(expenses) if expenses else 0,
         "active_tab": "members",
     })
 ```
@@ -870,12 +887,17 @@ def htmx_expense_form(request: Request, id: str = None):
 # routers/api.py
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
-from services.notion import create_expense, update_expense, delete_expense
+from deps import templates
+from services.notion import (
+    create_expense, update_expense, delete_expense,
+    get_all_members, get_all_expenses, build_member_update, write_settlement_batch,
+)
+from services.settlement import compute_settlement
 
 router = APIRouter(prefix="/api")
 
-@router.post("/expenses")
-def api_create_expense(
+
+def _parse_expense_form(
     name: str = Form(...),
     category: str = Form(...),
     amount: int = Form(..., gt=0),
@@ -883,33 +905,30 @@ def api_create_expense(
     tags: list[str] = Form(...),
     date: str = Form(""),
     note: str = Form(""),
-):
-    data = {"name": name, "category": category, "amount": amount,
+) -> dict:
+    return {"name": name, "category": category, "amount": amount,
             "payer_id": payer_id, "tags": tags, "date": date, "note": note}
+
+
+@router.post("/expenses")
+def api_create_expense(data: dict = Depends(_parse_expense_form)):
     create_expense(data)
     return RedirectResponse("/expenses", status_code=303)
 
+
 @router.post("/expenses/{expense_id}/update")
-def api_update_expense(
-    expense_id: str,
-    name: str = Form(...),
-    category: str = Form(...),
-    amount: int = Form(..., gt=0),
-    payer_id: str = Form(...),
-    tags: list[str] = Form(...),
-    date: str = Form(""),
-    note: str = Form(""),
-):
-    data = {"name": name, "category": category, "amount": amount,
-            "payer_id": payer_id, "tags": tags, "date": date, "note": note}
+def api_update_expense(expense_id: str, data: dict = Depends(_parse_expense_form)):
     update_expense(expense_id, data)
     return RedirectResponse("/expenses", status_code=303)
+
 
 @router.post("/expenses/{expense_id}/delete")
 def api_delete_expense(expense_id: str):
     delete_expense(expense_id)
     return RedirectResponse("/expenses", status_code=303)
 ```
+
+NOTE: Add `from fastapi import Depends` to imports.
 
 - [ ] **Step 6: Test CRUD in browser**
 
@@ -972,22 +991,16 @@ Returns HTML fragment with preview results, displayed via htmx.
 ```python
 @router.post("/settle/write")
 def api_settle_write(request: Request):
+    from services.settlement import build_settlement_instructions
+
     members = get_all_members()
     expenses = get_all_expenses()
     result = compute_settlement(members, expenses)
 
-    # Build updates for each member
+    # Build Notion updates for each member
     updates = []
     for mid, totals in result["member_totals"].items():
-        # Build settlement instruction
-        instructions = []
-        for tx in result["transactions"]:
-            if tx["from"] == mid:
-                instructions.append(f"轉 ${tx['amount']:,} 給 {tx['to_name']}")
-            elif tx["to"] == mid:
-                instructions.append(f"收 ${tx['amount']:,} 從 {tx['from_name']}")
-        instruction_text = "\n".join(instructions) if instructions else "已結清"
-
+        instruction_text = build_settlement_instructions(mid, result["transactions"])
         props = build_member_update(
             total_owes=totals["owes"],
             total_paid=totals["owed"],
@@ -998,12 +1011,22 @@ def api_settle_write(request: Request):
         updates.append({"page_id": mid, "properties": props})
 
     write_result = write_settlement_batch(updates)
-    return templates.TemplateResponse("settlement.html", {
-        "request": request,
-        "write_result": write_result,
-        "result": result,
-        "active_tab": "settlement",
-    })
+    # Redirect back to settlement page (shows updated state)
+    return RedirectResponse("/settlement?written=1", status_code=303)
+```
+
+NOTE: Add this helper function to `services/settlement.py`:
+
+```python
+def build_settlement_instructions(member_id: str, transactions: list[dict]) -> str:
+    """Build human-readable settlement instruction for a specific member."""
+    instructions = []
+    for tx in transactions:
+        if tx["from"] == member_id:
+            instructions.append(f"轉 ${tx['amount']:,} 給 {tx['to_name']}")
+        elif tx["to"] == member_id:
+            instructions.append(f"收 ${tx['amount']:,} 從 {tx['from_name']}")
+    return "\n".join(instructions) if instructions else "已結清"
 ```
 
 - [ ] **Step 5: Test full settlement flow**
@@ -1019,7 +1042,7 @@ def api_settle_write(request: Request):
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tripsplit/routers/ tripsplit/templates/settlement.html
+git add tripsplit/routers/ tripsplit/templates/settlement.html tripsplit/templates/partials/settlement_result.html tripsplit/services/settlement.py
 git commit -m "feat: implement settlement preview and Notion write-back"
 ```
 
