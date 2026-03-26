@@ -1,3 +1,4 @@
+import time
 from notion_client import Client
 
 _notion = None
@@ -210,7 +211,6 @@ def write_settlement_batch(member_updates: list[dict]) -> dict:
     member_updates: [{"page_id": str, "properties": dict}]
     Returns: {"success": [page_id], "failed": [page_id]}
     """
-    import time
     notion = _get_client()
     success = []
     failed = []

@@ -56,7 +56,8 @@ def htmx_members(request: Request, filter: str = "all"):
     try:
         from services.notion import get_all_members
         members = get_all_members()
-    except Exception:
+    except Exception as e:
+        print(f"[htmx_members] Notion error: {e}")
         members = []
     if filter == "unpaid":
         members = [m for m in members if m["payment_status"] != "已繳"]
@@ -124,7 +125,8 @@ def htmx_expense_form(request: Request, id: str = None):
         if id:
             expenses = get_all_expenses()
             expense = next((e for e in expenses if e["id"] == id), None)
-    except Exception:
+    except Exception as e:
+        print(f"[htmx_expense_form] Notion error: {e}")
         members = []
         expense = None
     # Get all exclusion tag options from Notion DB schema

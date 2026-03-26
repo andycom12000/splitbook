@@ -8,18 +8,20 @@ def test_parse_member():
     page = {
         "id": "page-id-1",
         "properties": {
-            "名字": {"title": [{"plain_text": "王小明"}]},
-            "繳費狀態": {"select": {"name": "已繳"}},
-            "分房": {"rich_text": [{"plain_text": "A01"}]},
-            "參與標籤": {"multi_select": [{"name": "全程"}, {"name": "酒水"}]},
+            "姓名": {"title": [{"plain_text": "王小明"}]},
+            "出席狀態": {"status": {"name": "已付款"}},
+            "房間": {"select": {"name": "A01"}},
+            "參與標籤": {"multi_select": [{"name": "不喝酒"}]},
+            "已付款項": {"number": 2300},
         },
     }
     result = parse_member(page)
     assert result["id"] == "page-id-1"
     assert result["name"] == "王小明"
-    assert result["payment_status"] == "已繳"
+    assert result["payment_status"] == "已付款"
     assert result["room"] == "A01"
-    assert result["tags"] == ["全程", "酒水"]
+    assert result["tags"] == ["不喝酒"]
+    assert result["prepaid"] == 2300
 
 
 def test_parse_expense():
@@ -30,7 +32,7 @@ def test_parse_expense():
             "類別": {"select": {"name": "民宿"}},
             "總金額": {"number": 40000},
             "付款人": {"relation": [{"id": "page-id-1"}]},
-            "參與標籤": {"multi_select": [{"name": "全程"}]},
+            "排除標籤": {"multi_select": [{"name": "不喝酒"}]},
             "日期": {"date": {"start": "2026-04-15"}},
             "備註": {"rich_text": [{"plain_text": "兩棟民宿"}]},
         },
@@ -41,7 +43,7 @@ def test_parse_expense():
     assert result["category"] == "民宿"
     assert result["amount"] == 40000
     assert result["payer_id"] == "page-id-1"
-    assert result["tags"] == ["全程"]
+    assert result["tags"] == ["不喝酒"]
     assert result["date"] == "2026-04-15"
     assert result["note"] == "兩棟民宿"
 
@@ -64,7 +66,7 @@ def test_parse_member_missing_fields():
     page = {
         "id": "page-id-2",
         "properties": {
-            "名字": {"title": [{"plain_text": "測試"}]},
+            "姓名": {"title": [{"plain_text": "測試"}]},
         },
     }
     result = parse_member(page)
@@ -72,3 +74,4 @@ def test_parse_member_missing_fields():
     assert result["payment_status"] == ""
     assert result["room"] == ""
     assert result["tags"] == []
+    assert result["prepaid"] == 0
