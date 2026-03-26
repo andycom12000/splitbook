@@ -155,7 +155,7 @@ def create_expense(data: dict) -> dict:
         "類別": {"select": {"name": data["category"]}},
         "總金額": {"number": data["amount"]},
         "付款人": {"relation": [{"id": data["payer_id"]}]},
-        "排除標籤": {"multi_select": [{"name": t} for t in data.get("tags", [])]},
+        "排除標籤": {"multi_select": [{"name": t} for t in data.get("tags", []) if t]},
     }
     if data.get("date"):
         properties["日期"] = {"date": {"start": data["date"]}}
@@ -185,7 +185,7 @@ def update_expense(page_id: str, data: dict) -> dict:
         properties["付款人"] = {"relation": [{"id": data["payer_id"]}]}
     if "tags" in data:
         properties["排除標籤"] = {
-            "multi_select": [{"name": t} for t in data["tags"]]
+            "multi_select": [{"name": t} for t in data["tags"] if t]
         }
     if "date" in data:
         properties["日期"] = {"date": {"start": data["date"]}}
