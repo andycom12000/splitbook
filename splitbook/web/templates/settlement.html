@@ -1,75 +1,92 @@
-<!-- splitbook/web/templates/settlement.html -->
+<!-- splitbook/web/templates/settlement.html — 結算（快照 + 付款進度） -->
 {% extends "base.html" %}
-{% block title %}結算 — SplitBook{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}結算 — HomeBook{% endblock %}
 {% block content %}
-<h1>結算</h1>
+<div class="page-head">
+  <h1>結算</h1>
+  <a class="btn-ghost" href="/transfers">轉帳與預付 →</a>
+</div>
 
-<section class="card">
+<section class="settle-live">
   <h2>目前方案（即時計算）</h2>
   {% if plan %}
-    <ul>
+    <ul class="settle-lines">
       {% for line in plan %}
-        <li>{{ names.get(line.from_id, "?") }} → {{ names.get(line.to_id, "?") }}
-            <strong>${{ "{:,}".format(line.amount) }}</strong></li>
+      <li class="settle-line">
+        {{ ui.member(names.get(line.from_id, "?"), colors.get(line.from_id, "member-1")) }}
+        <span class="arrow" aria-hidden="true">→</span>
+        {{ ui.member(names.get(line.to_id, "?"), colors.get(line.to_id, "member-1")) }}
+        <strong class="num">${{ "{:,}".format(line.amount) }}</strong>
+      </li>
       {% endfor %}
     </ul>
     <form method="post" action="/settlement/snapshot">
-      <button type="submit">凍結此方案（建立快照）</button>
+      <button type="submit" class="btn btn-primary">凍結此方案（建立快照）</button>
     </form>
   {% elif not error %}
-    <p class="muted">目前已結清，沒有需要的轉帳。</p>
+    <p class="all-done">目前已結清，沒有需要的轉帳 ✓</p>
   {% endif %}
 </section>
 
 {% if snapshot %}
-<section class="card">
-  <h2>付款進度（快照 #{{ snapshot.snap.id }}・{{ snapshot.snap.created_at }}）</h2>
+<section class="settle-snapshot">
+  <h2>付款進度<span class="muted">（快照 #{{ snapshot.snap.id }}・{{ snapshot.snap.created_at }}）</span></h2>
   {% if snapshot.stale %}
-    <div class="alert">此快照已過期：快照後帳目有異動。請確認後重新凍結方案。</div>
+    <div class="notice warn">此快照已過期：快照後帳目有異動。請確認後重新凍結方案。</div>
   {% endif %}
   {% for col in snapshot.collectors %}
-    <h3>{{ names.get(col.to_id, "?") }} 應收 ${{ "{:,}".format(col.expected) }}
-        ／已收 ${{ "{:,}".format(col.received) }}</h3>
-    <ul>
+  <div class="collector">
+    <h3>{{ ui.member(names.get(col.to_id, "?"), colors.get(col.to_id, "member-1")) }}
+        應收 {{ ui.money(col.expected) }}／已收 {{ ui.money(col.received) }}</h3>
+    <ul class="settle-lines">
       {% for lp in col.lines %}
-      <li>
-        {{ names.get(lp.from_id, "?") }} → {{ names.get(lp.to_id, "?") }}
-        ${{ "{:,}".format(lp.planned) }}
+      <li class="settle-line">
+        {{ ui.member(names.get(lp.from_id, "?"), colors.get(lp.from_id, "member-1")) }}
+        <span class="arrow" aria-hidden="true">→</span>
+        {{ ui.member(names.get(lp.to_id, "?"), colors.get(lp.to_id, "member-1")) }}
+        <span class="num">${{ "{:,}".format(lp.planned) }}</span>
+        <span class="pay-status {{ lp.status }}">
         {% if lp.status == "paid" %}✅ 已付 ${{ "{:,}".format(lp.paid) }}（已付清）
         {% elif lp.status == "overpaid" %}⚠️ 已付 ${{ "{:,}".format(lp.paid) }}（超額）
-        {% elif lp.status == "partial" %}⏳ 已付 ${{ "{:,}".format(lp.paid) }}，
-            差 ${{ "{:,}".format(lp.remaining) }}
+        {% elif lp.status == "partial" %}⏳ 已付 ${{ "{:,}".format(lp.paid) }}，差 ${{ "{:,}".format(lp.remaining) }}
         {% else %}未付
         {% endif %}
+        </span>
         {% if lp.remaining > 0 %}
-        <form method="post" action="/settlement/pay" class="inline">
+        <form method="post" action="/settlement/pay" class="inline pay-form">
           <input type="hidden" name="from_id" value="{{ lp.from_id }}">
           <input type="hidden" name="to_id" value="{{ lp.to_id }}">
           <input type="hidden" name="snapshot_id" value="{{ snapshot.snap.id }}">
           <input type="number" name="amount" value="{{ lp.remaining }}"
-                 min="1" class="short">
-          <button type="submit">記錄付款</button>
+                 min="1" class="short" aria-label="付款金額">
+          <button type="submit" class="btn">記錄付款</button>
         </form>
         {% endif %}
       </li>
       {% endfor %}
     </ul>
+  </div>
   {% endfor %}
   {% if snapshot.payments %}
     <h3>已記錄的付款</h3>
-    <ul>
+    <ul class="settle-lines payments">
       {% for p in snapshot.payments %}
-      <li>{{ p.date }} {{ names.get(p.payer_id, "?") }} →
-          {{ names.get(p.payee_id, "?") }} ${{ "{:,}".format(p.amount) }}
+      <li class="settle-line">
+        <span class="muted">{{ p.date }}</span>
+        {{ ui.member(names.get(p.payer_id, "?"), colors.get(p.payer_id, "member-1")) }}
+        <span class="arrow" aria-hidden="true">→</span>
+        {{ ui.member(names.get(p.payee_id, "?"), colors.get(p.payee_id, "member-1")) }}
+        <span class="num">${{ "{:,}".format(p.amount) }}</span>
         <form method="post" action="/payments/{{ p.id }}/undo" class="inline">
-          <button class="ghost">撤銷</button>
+          <button class="btn-ghost" type="submit">撤銷</button>
         </form>
       </li>
       {% endfor %}
     </ul>
   {% endif %}
   {% if snapshot.unplanned %}
-    <div class="alert">有 {{ snapshot.unplanned | length }} 筆付款不在方案內，請檢查。</div>
+    <div class="notice warn">有 {{ snapshot.unplanned | length }} 筆付款不在方案內，請檢查。</div>
   {% endif %}
 </section>
 {% endif %}

@@ -1,23 +1,27 @@
-<!-- splitbook/web/templates/login.html -->
+<!-- splitbook/web/templates/login.html — 選身分 + PIN -->
 {% extends "base.html" %}
-{% block title %}登入 — SplitBook{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}登入 — HomeBook{% endblock %}
 {% block content %}
-<h1>選擇你的身分</h1>
-<form method="post" action="/login" class="card">
-  {% for g in groups %}
-    <fieldset>
+<div class="auth-page">
+  <h1>你是誰？</h1>
+  <form method="post" action="/login" class="auth-form">
+    {% for g in groups %}
+    <fieldset class="chips login-members">
       <legend>{{ g.group['name'] }}</legend>
       {% for m in g.members %}
-        <label class="radio">
-          <input type="radio" name="member_id" value="{{ m['id'] }}" required>
-          {{ m['name'] }}{% if m['pin_hash'] is none %}（尚未設定 PIN）{% endif %}
-        </label>
+      {% set row = g.rows[loop.index0] %}
+      <label class="chip chip-member">
+        <input type="radio" name="member_id" value="{{ m['id'] }}" required>
+        <span>{{ ui.avatar(m['name'], m['color']) }}{{ m['name'] }}{% if row['pin_hash'] is none %}<em class="muted">（尚未設定 PIN）</em>{% endif %}</span>
+      </label>
       {% endfor %}
     </fieldset>
-  {% endfor %}
-  <label>PIN <input name="pin" type="password" inputmode="numeric"
-         placeholder="第一次登入即設定 PIN"></label>
-  <button type="submit">登入</button>
-</form>
-<p><a href="/setup">＋ 建立新帳本</a></p>
+    {% endfor %}
+    <label>PIN <input name="pin" type="password" inputmode="numeric"
+           placeholder="第一次登入即設定 PIN" autocomplete="current-password"></label>
+    <button class="btn btn-primary btn-lg" type="submit">登入</button>
+  </form>
+  <p><a class="more-link" href="/setup">＋ 建立新家庭</a></p>
+</div>
 {% endblock %}

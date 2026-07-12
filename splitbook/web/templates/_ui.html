@@ -1,0 +1,12 @@
+<!-- splitbook/web/templates/_ui.html — 共用巨集：成員標記與金額 -->
+{% macro avatar(name, color) -%}
+<span class="avatar {{ color }}" aria-hidden="true">{{ name[0] }}</span>
+{%- endmacro %}
+
+{% macro member(name, color) -%}
+<span class="member-pill">{{ avatar(name, color) }}<span>{{ name }}</span></span>
+{%- endmacro %}
+
+{% macro money(x) -%}
+<span class="num">${{ "{:,}".format(x) }}</span>
+{%- endmacro %}

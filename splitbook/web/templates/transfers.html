@@ -1,44 +1,54 @@
-<!-- splitbook/web/templates/transfers.html -->
+<!-- splitbook/web/templates/transfers.html — 轉帳與預付（結算的子頁） -->
 {% extends "base.html" %}
-{% block title %}轉帳 — SplitBook{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}轉帳與預付 — HomeBook{% endblock %}
 {% block content %}
-<h1>成員間轉帳</h1>
-<form method="post" action="/transfers" class="card">
-  <h2>記一筆轉帳（預付款/還款）</h2>
-  <label>轉出
-    <select name="from_id">
-      {% for m in members %}<option value="{{ m['id'] }}">{{ m['name'] }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>轉入
-    <select name="to_id">
-      {% for m in members %}<option value="{{ m['id'] }}">{{ m['name'] }}</option>{% endfor %}
-    </select>
-  </label>
-  <label>金額 <input name="amount" type="number" min="1" required></label>
-  <label>備註 <input name="note"></label>
-  <button type="submit">記錄</button>
+<div class="page-head">
+  <h1>轉帳與預付</h1>
+  <a class="btn-ghost" href="/settlement">← 回結算</a>
+</div>
+
+<form method="post" action="/transfers" class="transfer-add">
+  <h2>記一筆轉帳（預付款／還款）</h2>
+  <div class="transfer-fields">
+    <label>轉出
+      <select name="from_id">
+        {% for m in members %}<option value="{{ m['id'] }}" {{ 'selected' if m['id'] == me['id'] }}>{{ m['name'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>轉入
+      <select name="to_id">
+        {% for m in members %}<option value="{{ m['id'] }}">{{ m['name'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>金額 <input name="amount" type="number" inputmode="numeric" min="1" required></label>
+    <label>備註 <input name="note" placeholder="（可留白）"></label>
+  </div>
+  <button class="btn btn-primary" type="submit">記錄</button>
 </form>
 
-<table class="list">
-  <tr><th>日期</th><th>轉出</th><th>轉入</th><th>金額</th><th>類型</th><th>備註</th><th></th></tr>
-  {% for t in transfers %}
-  <tr>
-    <td>{{ t.date }}</td>
-    <td>{{ names.get(t.payer_id, "?") }}</td>
-    <td>{{ names.get(t.payee_id, "?") }}</td>
-    <td>${{ "{:,}".format(t.amount) }}</td>
-    <td>{{ "結算轉帳" if t.transfer_kind == "settlement" else "預付款" }}</td>
-    <td class="muted">{{ t.note }}</td>
-    <td>
+<section class="transfer-history">
+  <h2>紀錄</h2>
+  {% if transfers %}
+  <ul class="settle-lines">
+    {% for t in transfers %}
+    <li class="settle-line">
+      <span class="muted">{{ t.date }}</span>
+      {{ ui.member(names.get(t.payer_id, "?"), colors.get(t.payer_id, "member-1")) }}
+      <span class="arrow" aria-hidden="true">→</span>
+      {{ ui.member(names.get(t.payee_id, "?"), colors.get(t.payee_id, "member-1")) }}
+      <span class="num">${{ "{:,}".format(t.amount) }}</span>
+      <span class="tag">{{ "結算轉帳" if t.transfer_kind == "settlement" else "預付款" }}</span>
+      {% if t.note %}<span class="muted">{{ t.note }}</span>{% endif %}
       <form method="post" action="/transfers/{{ t.id }}/delete" class="inline"
             onsubmit="return confirm('確定刪除？')">
-        <button class="ghost">刪除</button>
+        <button class="btn-ghost danger" type="submit">刪除</button>
       </form>
-    </td>
-  </tr>
+    </li>
+    {% endfor %}
+  </ul>
   {% else %}
-  <tr><td colspan="7" class="muted">尚未有轉帳</td></tr>
-  {% endfor %}
-</table>
+  <p class="empty-hint">尚未有轉帳。家人先幫忙代繳、或先給一筆預付款，都記在這裡。</p>
+  {% endif %}
+</section>
 {% endblock %}

@@ -1,23 +1,95 @@
-<!-- splitbook/web/templates/home.html -->
+<!-- splitbook/web/templates/home.html — 總覽（這個月） -->
 {% extends "base.html" %}
-{% block title %}{{ group['name'] }} — SplitBook{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}總覽 — HomeBook{% endblock %}
 {% block content %}
-<h1>{{ group['name'] }}</h1>
-<p class="muted">總支出 ${{ "{:,}".format(total_expense) }}</p>
-<div class="cards">
-  {% for m in members %}
-    {% set b = balances.get(m['id']) %}
-    <div class="card">
-      <h2>{{ m['name'] }}{% if m['id'] == me['id'] %}（我）{% endif %}</h2>
-      {% if b %}
-        <p>代墊 ${{ "{:,}".format(b.advanced) }}／應分攤 ${{ "{:,}".format(b.share) }}</p>
-        <p>已轉出 ${{ "{:,}".format(b.sent) }}／已收到 ${{ "{:,}".format(b.received) }}</p>
-        <p class="net {{ 'pos' if b.net > 0 else 'neg' if b.net < 0 else '' }}">
-          淨額 ${{ "{:,}".format(b.net) }}
-          {% if b.net > 0 %}（應收回）{% elif b.net < 0 %}（應付）{% else %}（已結清）{% endif %}
-        </p>
-      {% endif %}
+<div class="overview">
+
+  {% if due %}
+  <section class="area-due">
+    <h2>該繳的</h2>
+    <div class="due-cards">
+      {% for t in due %}
+      <article class="due-card">
+        <div class="due-head">
+          <strong>{{ t['name'] }}</strong>
+          <span class="due-when">
+            {% if due_days[t['id']] > 0 %}逾期 {{ due_days[t['id']] }} 天
+            {% else %}今天到期{% endif %}
+          </span>
+        </div>
+        {% if t['amount'] %}
+          <p class="due-amount num">${{ "{:,}".format(t['amount']) }}</p>
+        {% else %}
+          <p class="due-amount muted">帳單來了嗎？這期金額入帳時填</p>
+        {% endif %}
+        <div class="due-actions">
+          <a class="btn btn-primary" href="/expenses/new?template={{ t['id'] }}&back=/">確認入帳</a>
+          <form method="post" action="/recurring/{{ t['id'] }}/skip" class="inline">
+            <input type="hidden" name="back" value="/">
+            <button class="btn-ghost" type="submit">跳過本期</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
     </div>
-  {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="area-summary">
+    <h1>{{ month_num }} 月</h1>
+    <p class="lede">
+      這個月全家花了 {{ ui.money(month_total) }}，
+      {%- if my_net > 0 %}你目前應收 {{ ui.money(my_net) }}。
+      {%- elif my_net < 0 %}你目前應付 {{ ui.money(-my_net) }}。
+      {%- else %}你目前已結清。{% endif %}
+    </p>
+    <ul class="member-nets">
+      {% for row in member_nets %}
+      <li>
+        {{ ui.member(row.v.name, row.v.color) }}
+        {% if row.net is not none %}
+        <span class="num net {{ 'pos' if row.net > 0 else 'neg' if row.net < 0 else '' }}">${{ "{:,}".format(row.net) }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="area-shopping">
+    <h2>要買的</h2>
+    {% if shopping %}
+    <ul class="preview-list">
+      {% for it in shopping %}
+      <li><span>{{ it['name'] }}</span>
+        {% if it['estimate'] %}<span class="num muted">約 ${{ "{:,}".format(it['estimate']) }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <a class="more-link" href="/list">{% if shopping_more %}還有 {{ shopping_more }} 項，{% endif %}去清單看 →</a>
+    {% else %}
+    <p class="empty-hint">清單是空的。想到要買什麼，先<a href="/list">記進清單</a>，買完打勾就成帳。</p>
+    {% endif %}
+  </section>
+
+  <section class="area-recent">
+    <h2>最近帳目</h2>
+    {% if recent %}
+    <ul class="entry-rows">
+      {% for e in recent %}
+      <li class="entry-row">
+        <span class="entry-date">{{ date_label(e.date) }}</span>
+        <span class="entry-name">{{ e.name }}</span>
+        {{ ui.member(names.get(e.payer_id, "?"), colors.get(e.payer_id, "member-1")) }}
+        <span class="num entry-amount">${{ "{:,}".format(e.amount) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <a class="more-link" href="/expenses">看整個月 →</a>
+    {% else %}
+    <p class="empty-hint">這個月還沒有帳，右下角「＋記一筆」開始。</p>
+    {% endif %}
+  </section>
+
 </div>
 {% endblock %}

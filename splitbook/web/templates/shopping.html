@@ -1,0 +1,109 @@
+<!-- splitbook/web/templates/shopping.html — 清單（買完打勾轉帳目） -->
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}清單 — HomeBook{% endblock %}
+{% block content %}
+<h1>要買的</h1>
+
+<form method="post" action="/list/add" class="list-add">
+  <input name="name" required placeholder="牛奶、衛生紙…" aria-label="要買什麼">
+  <input name="estimate" type="number" inputmode="numeric" min="1"
+         class="short" placeholder="約多少" aria-label="預估金額">
+  <button class="btn btn-primary" type="submit">加進清單</button>
+</form>
+
+{% if open_items %}
+<form method="get" action="/list" class="buy-form" id="buy-form">
+  <ul class="shop-rows">
+    {% for it in open_items %}
+    <li class="shop-row">
+      <label class="shop-check">
+        <input type="checkbox" name="buy" value="{{ it['id'] }}">
+        <span class="shop-name">{{ it['name'] }}</span>
+        {% if it['note'] %}<span class="muted">{{ it['note'] }}</span>{% endif %}
+      </label>
+      <span class="shop-meta">
+        {% if it['estimate'] %}<span class="num muted">約 ${{ "{:,}".format(it['estimate']) }}</span>{% endif %}
+        {{ ui.avatar(names.get(it['added_by'], "?"), colors.get(it['added_by'], "member-1")) }}
+        <button class="btn-ghost danger" type="submit"
+                form="del-item-{{ it['id'] }}"
+                onclick="return confirm('把「{{ it['name'] }}」從清單移除？')">移除</button>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="buy-bar" id="buy-bar">
+    <span id="buy-count" class="muted">勾選買到的東西</span>
+    <button class="btn btn-primary" type="submit">買到了！</button>
+  </div>
+</form>
+{% for it in open_items %}
+<form id="del-item-{{ it['id'] }}" method="post" action="/list/{{ it['id'] }}/delete" hidden></form>
+{% endfor %}
+{% elif bought %}
+<p class="all-done">都買齊了，清單空空的 ✓</p>
+{% else %}
+<p class="empty-hint">清單是空的。想到要買什麼先記進來，買完打勾、填實際金額，就直接成為一筆帳。</p>
+{% endif %}
+
+{% if bought %}
+<section class="bought-section">
+  <h2>最近買到的</h2>
+  <ul class="shop-rows bought">
+    {% for it in bought %}
+    <li class="shop-row">
+      <span class="shop-name done">✓ {{ it['name'] }}</span>
+      <span class="shop-meta muted">
+        {% set e = bought_entries.get(it['entry_id']) %}
+        {% if e %}<a href="/expenses?month={{ e.date[:7] }}">已入帳 <span class="num">${{ "{:,}".format(e.amount) }}</span></a>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if sheet_items %}
+<dialog class="sheet" data-sheet open>
+  <form method="post" action="/list/buy">
+    <h2>買到了！</h2>
+    <p class="muted">
+      {% for it in sheet_items %}{{ it['name'] }}{{ "、" if not loop.last }}{% endfor %}
+      {% if sheet_items | length > 1 %}（{{ sheet_items | length }} 項一起結帳）{% endif %}
+    </p>
+    <input type="hidden" name="item_ids"
+           value="{% for it in sheet_items %}{{ it['id'] }}{{ ',' if not loop.last }}{% endfor %}">
+    <label class="qa-amount-label" for="buy-amount">實際多少</label>
+    <div class="qa-amount">
+      <span aria-hidden="true">$</span>
+      <input id="buy-amount" name="amount" type="number" inputmode="numeric" required
+             value="{{ sheet_total or '' }}" placeholder="0" autofocus>
+    </div>
+    <fieldset class="chips">
+      <legend>類別</legend>
+      {% for c in categories %}
+      <label class="chip">
+        <input type="radio" name="category" value="{{ c }}" {{ 'checked' if c == '日用' }}>
+        <span>{{ c }}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <fieldset class="chips payer-chips">
+      <legend>誰付的</legend>
+      {% for m in members %}
+      <label class="chip chip-member">
+        <input type="radio" name="payer_id" value="{{ m['id'] }}"
+               {{ 'checked' if m['id'] == me['id'] }}>
+        <span>{{ ui.avatar(m['name'], m['color']) }}{{ m['name'] }}{% if m['id'] == me['id'] %}（我）{% endif %}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <p class="muted">全家均分入帳。</p>
+    <div class="qa-actions">
+      <button type="submit" class="btn btn-primary btn-lg">入帳</button>
+      <a class="btn-ghost" href="/list">先不要</a>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
