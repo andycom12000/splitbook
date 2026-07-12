@@ -246,7 +246,7 @@ legend { font-size: var(--text-sm); color: var(--ink-muted); padding: 0; margin-
 .chips { display: block; }
 .chips .chip { display: inline-block; margin: 0 var(--sp-2) var(--sp-2) 0; }
 .chip input { position: absolute; opacity: 0; pointer-events: none; }
-.chip span {
+.chip > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -259,7 +259,7 @@ legend { font-size: var(--text-sm); color: var(--ink-muted); padding: 0; margin-
   cursor: pointer;
   transition: background 150ms var(--ease), border-color 150ms var(--ease);
 }
-.chip span:hover { border-color: var(--line-strong); }
+.chip > span:hover { border-color: var(--line-strong); }
 .chip input:checked + span {
   background: var(--accent-soft);
   border-color: var(--accent);
@@ -539,7 +539,7 @@ legend { font-size: var(--text-sm); color: var(--ink-muted); padding: 0; margin-
 }
 .member-inputs input { margin-top: 0; }
 .login-members .chip { display: block; margin: 0 0 var(--sp-2); }
-.login-members .chip span { width: 100%; min-height: 48px; }
+.login-members .chip > span { width: 100%; min-height: 48px; }
 
 /* ---- motion 偏好 ---- */
 @media (prefers-reduced-motion: reduce) {
