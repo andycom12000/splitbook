@@ -169,3 +169,33 @@ def test_cross_group_update_and_delete_blocked_and_no_leak():
     _login(c, member_id=1, pin="1234")
     page = c.get("/expenses")
     assert "民宿" in page.text
+
+
+def test_record_prepay_transfer_affects_balances():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "民宿", "category": "住宿", "amount": 3000, "payer_id": 1,
+        "split_kind": "equal"})
+    r = c.post("/transfers", data={
+        "from_id": 2, "to_id": 1, "amount": 500, "note": "先繳"},
+        follow_redirects=False)
+    assert r.status_code == 303
+    page = c.get("/transfers")
+    assert "先繳" in page.text
+    # 小華 net：-1000 + 500 = -500
+    home = c.get("/")
+    assert "$-500" in home.text or "-500" in home.text
+
+
+def test_self_transfer_rejected():
+    c = _logged_in_client()
+    r = c.post("/transfers", data={"from_id": 1, "to_id": 1, "amount": 100})
+    assert "不可相同" in r.text
+
+
+def test_delete_transfer():
+    c = _logged_in_client()
+    c.post("/transfers", data={"from_id": 2, "to_id": 1, "amount": 500})
+    c.post("/transfers/1/delete")
+    page = c.get("/transfers")
+    assert "尚未有轉帳" in page.text

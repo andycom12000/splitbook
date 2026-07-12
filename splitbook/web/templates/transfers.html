@@ -1,0 +1,44 @@
+<!-- splitbook/web/templates/transfers.html -->
+{% extends "base.html" %}
+{% block title %}轉帳 — SplitBook{% endblock %}
+{% block content %}
+<h1>成員間轉帳</h1>
+<form method="post" action="/transfers" class="card">
+  <h2>記一筆轉帳（預付款/還款）</h2>
+  <label>轉出
+    <select name="from_id">
+      {% for m in members %}<option value="{{ m['id'] }}">{{ m['name'] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>轉入
+    <select name="to_id">
+      {% for m in members %}<option value="{{ m['id'] }}">{{ m['name'] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>金額 <input name="amount" type="number" min="1" required></label>
+  <label>備註 <input name="note"></label>
+  <button type="submit">記錄</button>
+</form>
+
+<table class="list">
+  <tr><th>日期</th><th>轉出</th><th>轉入</th><th>金額</th><th>類型</th><th>備註</th><th></th></tr>
+  {% for t in transfers %}
+  <tr>
+    <td>{{ t.date }}</td>
+    <td>{{ names.get(t.payer_id, "?") }}</td>
+    <td>{{ names.get(t.payee_id, "?") }}</td>
+    <td>${{ "{:,}".format(t.amount) }}</td>
+    <td>{{ "結算轉帳" if t.transfer_kind == "settlement" else "預付款" }}</td>
+    <td class="muted">{{ t.note }}</td>
+    <td>
+      <form method="post" action="/transfers/{{ t.id }}/delete" class="inline"
+            onsubmit="return confirm('確定刪除？')">
+        <button class="ghost">刪除</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">尚未有轉帳</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -226,3 +226,56 @@ def delete_expense_route(request: Request, eid: int):
             "expenses.html",
             _expenses_context(request, repo, gid, me, error=str(e)))
     return _redirect("/expenses")
+
+
+# -- transfers ------------------------------------------------------------
+def _transfers_context(request, repo, gid, me, error=""):
+    members = repo.list_members(gid)
+    names = {m["id"]: m["name"] for m in members}
+    transfers = [e for e in repo.list_entries(gid) if e.kind == "transfer"]
+    transfers.sort(key=lambda e: e.id, reverse=True)
+    return {"request": request, "me": me, "members": members, "names": names,
+            "transfers": transfers, "error": error, "active_tab": "transfers"}
+
+
+@router.get("/transfers")
+def transfers_page(request: Request):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    return templates.TemplateResponse(
+        "transfers.html", _transfers_context(request, repo, gid, me))
+
+
+@router.post("/transfers")
+def create_transfer_route(request: Request, from_id: int = Form(...),
+                          to_id: int = Form(...), amount: int = Form(...),
+                          note: str = Form("")):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    try:
+        repo.record_transfer(gid, amount, from_id, to_id, "prepay",
+                             name="預付款", note=note, created_by=me["id"])
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "transfers.html",
+            _transfers_context(request, repo, gid, me, error=str(e)))
+    return _redirect("/transfers")
+
+
+@router.post("/transfers/{eid}/delete")
+def delete_transfer_route(request: Request, eid: int):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    try:
+        repo.soft_delete_entry(eid, gid)
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "transfers.html",
+            _transfers_context(request, repo, gid, me, error=str(e)))
+    return _redirect("/transfers")
