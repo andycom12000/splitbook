@@ -1,0 +1,83 @@
+<!-- splitbook/web/templates/expenses.html -->
+{% extends "base.html" %}
+{% block title %}帳目 — SplitBook{% endblock %}
+{% block content %}
+<h1>帳目</h1>
+
+<form method="post"
+      action="{{ '/expenses/' ~ editing.id ~ '/update' if editing else '/expenses' }}"
+      class="card">
+  <h2>{{ "編輯支出" if editing else "新增支出" }}</h2>
+  <label>項目 <input name="name" required
+         value="{{ editing.name if editing }}"></label>
+  <label>類別
+    <input name="category" list="cats"
+           value="{{ editing.category if editing }}">
+    <datalist id="cats">
+      {% for c in categories %}<option value="{{ c }}">{% endfor %}
+    </datalist>
+  </label>
+  <label>總金額 <input name="amount" type="number" required
+         value="{{ editing.amount if editing }}"></label>
+  <label>付款人
+    <select name="payer_id">
+      {% for m in members %}
+        <option value="{{ m['id'] }}"
+          {{ 'selected' if editing and editing.payer_id == m['id'] }}>
+          {{ m['name'] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>日期 <input name="date" type="date"
+         value="{{ editing.date if editing }}"></label>
+  <label>備註 <input name="note" value="{{ editing.note if editing }}"></label>
+
+  <fieldset>
+    <legend>分攤方式</legend>
+    <label class="radio"><input type="radio" name="split_kind" value="equal" checked> 均分</label>
+    <label class="radio"><input type="radio" name="split_kind" value="weights"> 依權重</label>
+    <label class="radio"><input type="radio" name="split_kind" value="exact"> 指定金額</label>
+    <table class="split-table">
+      <tr><th>成員</th><th>參與(均分)</th><th>權重</th><th>金額(指定)</th></tr>
+      {% for m in members %}
+      <tr>
+        <td>{{ m['name'] }}</td>
+        <td><input type="checkbox" name="p_{{ m['id'] }}"></td>
+        <td><input type="number" name="w_{{ m['id'] }}" min="0" class="short"></td>
+        <td><input type="number" name="x_{{ m['id'] }}" class="short"></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p class="muted">均分不勾選任何人 = 全員參與。餘數從付款人的下一位開始每人 +1。</p>
+  </fieldset>
+  <button type="submit">{{ "更新" if editing else "新增" }}</button>
+  {% if editing %}<a href="/expenses">取消編輯</a>{% endif %}
+</form>
+
+<table class="list">
+  <tr><th>日期</th><th>項目</th><th>類別</th><th>金額</th><th>付款人</th><th>分攤</th><th></th></tr>
+  {% for e in expenses %}
+  <tr>
+    <td>{{ e.date }}</td>
+    <td>{{ e.name }}</td>
+    <td>{{ e.category }}</td>
+    <td>${{ "{:,}".format(e.amount) }}</td>
+    <td>{{ names.get(e.payer_id, "?") }}</td>
+    <td class="muted">
+      {% for mid, a in e.allocations.items() %}
+        {{ names.get(mid, "?") }} ${{ "{:,}".format(a) }}{{ "、" if not loop.last }}
+      {% endfor %}
+    </td>
+    <td>
+      <a href="/expenses?edit={{ e.id }}">編輯</a>
+      <form method="post" action="/expenses/{{ e.id }}/delete" class="inline"
+            onsubmit="return confirm('確定刪除？')">
+        <button class="ghost">刪除</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">尚未有帳目</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

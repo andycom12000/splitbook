@@ -3,10 +3,14 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from splitbook.domain.ledger import compute_balances
+from splitbook.domain.split import (
+    SplitError, split_equal, split_exact, split_weights)
 from splitbook.web.app import templates
 from splitbook.web.auth import hash_pin, make_token, parse_token, verify_pin
 
 router = APIRouter()
+
+CATEGORIES = ["住宿", "餐費", "交通", "票券", "雜支"]
 
 
 def current(request: Request):
@@ -122,3 +126,89 @@ def home(request: Request):
         "group": repo.get_group(gid), "total_expense": total_expense,
         "active_tab": "home",
     })
+
+
+# -- expenses -----------------------------------------------------------
+def parse_split(form, member_ids: list[int], amount: int,
+                payer_id: int) -> dict[int, int]:
+    kind = form.get("split_kind", "equal")
+    if kind == "equal":
+        participants = [mid for mid in member_ids if form.get(f"p_{mid}")]
+        if not participants:
+            participants = list(member_ids)
+        return split_equal(amount, participants, payer_id=payer_id)
+    if kind == "weights":
+        weights = {mid: int(form.get(f"w_{mid}") or 0) for mid in member_ids}
+        return split_weights(amount, {k: v for k, v in weights.items() if v > 0})
+    if kind == "exact":
+        amounts = {mid: int(form.get(f"x_{mid}") or 0) for mid in member_ids}
+        return split_exact(amount, {k: v for k, v in amounts.items() if v != 0})
+    raise SplitError(f"未知的分攤規則 {kind!r}")
+
+
+def _expenses_context(request, repo, gid, me, error=""):
+    members = repo.list_members(gid)
+    names = {m["id"]: m["name"] for m in members}
+    expenses = [e for e in repo.list_entries(gid) if e.kind == "expense"]
+    expenses.sort(key=lambda e: (e.date, e.id), reverse=True)
+    edit_id = request.query_params.get("edit")
+    editing = repo.get_entry(int(edit_id)) if edit_id else None
+    return {"request": request, "me": me, "members": members, "names": names,
+            "expenses": expenses, "editing": editing, "error": error,
+            "categories": CATEGORIES, "active_tab": "expenses"}
+
+
+@router.get("/expenses")
+def expenses_page(request: Request):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    return templates.TemplateResponse(
+        "expenses.html", _expenses_context(request, repo, gid, me))
+
+
+async def _handle_expense_form(request, entry_id: int | None):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    form = await request.form()
+    try:
+        amount = int(form["amount"])
+        payer_id = int(form["payer_id"])
+        member_ids = [m["id"] for m in repo.list_members(gid)]
+        alloc = parse_split(form, member_ids, amount, payer_id)
+        kwargs = dict(
+            name=form["name"], amount=amount, payer_id=payer_id,
+            allocations=alloc, category=form.get("category", ""),
+            date=form.get("date", ""), note=form.get("note", ""))
+        if entry_id is None:
+            repo.record_expense(gid, created_by=me["id"], **kwargs)
+        else:
+            repo.update_expense(entry_id, **kwargs)
+    except (SplitError, ValueError, KeyError) as e:
+        return templates.TemplateResponse(
+            "expenses.html",
+            _expenses_context(request, repo, gid, me, error=str(e)))
+    return _redirect("/expenses")
+
+
+@router.post("/expenses")
+async def create_expense_route(request: Request):
+    return await _handle_expense_form(request, None)
+
+
+@router.post("/expenses/{eid}/update")
+async def update_expense_route(request: Request, eid: int):
+    return await _handle_expense_form(request, eid)
+
+
+@router.post("/expenses/{eid}/delete")
+def delete_expense_route(request: Request, eid: int):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    repo.soft_delete_entry(eid)
+    return _redirect("/expenses")

@@ -63,3 +63,63 @@ def test_home_shows_members_and_balances(client):
     assert r.status_code == 200
     for name in ("小明", "小華", "小美"):
         assert name in r.text
+
+
+def _logged_in_client():
+    app = create_app(db_path=":memory:", secret="test-secret")
+    c = TestClient(app)
+    _setup_group(c)
+    _login(c, member_id=1, pin="1234")
+    return c
+
+
+def test_create_equal_expense_defaults_to_all(client=None):
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "民宿", "category": "住宿", "amount": 300, "payer_id": 1,
+        "split_kind": "equal"}, follow_redirects=False)
+    assert r.status_code == 303
+    page = c.get("/expenses")
+    assert "民宿" in page.text
+    home = c.get("/")
+    assert "$200" in home.text  # 小明 net = 300 - 100
+
+
+def test_create_weighted_expense():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "包車", "category": "交通", "amount": 100, "payer_id": 1,
+        "split_kind": "weights", "w_1": 2, "w_2": 1, "w_3": 1})
+    page = c.get("/expenses")
+    assert "包車" in page.text
+
+
+def test_exact_split_mismatch_shows_error():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "門票", "category": "票券", "amount": 100, "payer_id": 1,
+        "split_kind": "exact", "x_1": 60, "x_2": 50})
+    assert "不等於總金額" in r.text
+
+
+def test_update_and_delete_expense():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "餐費", "category": "餐費", "amount": 300, "payer_id": 1,
+        "split_kind": "equal"})
+    c.post("/expenses/1/update", data={
+        "name": "晚餐", "category": "餐費", "amount": 600, "payer_id": 2,
+        "split_kind": "equal"})
+    page = c.get("/expenses")
+    assert "晚餐" in page.text and "餐費(舊)" not in page.text
+    c.post("/expenses/1/delete")
+    page = c.get("/expenses")
+    assert "晚餐" not in page.text
+
+
+def test_expense_requires_login():
+    app = create_app(db_path=":memory:", secret="test-secret")
+    c = TestClient(app)
+    _setup_group(c)
+    r = c.get("/expenses", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"
