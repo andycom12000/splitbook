@@ -1,0 +1,76 @@
+<!-- splitbook/web/templates/settlement.html -->
+{% extends "base.html" %}
+{% block title %}結算 — SplitBook{% endblock %}
+{% block content %}
+<h1>結算</h1>
+
+<section class="card">
+  <h2>目前方案（即時計算）</h2>
+  {% if plan %}
+    <ul>
+      {% for line in plan %}
+        <li>{{ names.get(line.from_id, "?") }} → {{ names.get(line.to_id, "?") }}
+            <strong>${{ "{:,}".format(line.amount) }}</strong></li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="/settlement/snapshot">
+      <button type="submit">凍結此方案（建立快照）</button>
+    </form>
+  {% else %}
+    <p class="muted">目前已結清，沒有需要的轉帳。</p>
+  {% endif %}
+</section>
+
+{% if snapshot %}
+<section class="card">
+  <h2>付款進度（快照 #{{ snapshot.snap.id }}・{{ snapshot.snap.created_at }}）</h2>
+  {% if snapshot.stale %}
+    <div class="alert">此快照已過期：快照後帳目有異動。請確認後重新凍結方案。</div>
+  {% endif %}
+  {% for col in snapshot.collectors %}
+    <h3>{{ names.get(col.to_id, "?") }} 應收 ${{ "{:,}".format(col.expected) }}
+        ／已收 ${{ "{:,}".format(col.received) }}</h3>
+    <ul>
+      {% for lp in col.lines %}
+      <li>
+        {{ names.get(lp.from_id, "?") }} → {{ names.get(lp.to_id, "?") }}
+        ${{ "{:,}".format(lp.planned) }}
+        {% if lp.status == "paid" %}✅ 已付 ${{ "{:,}".format(lp.paid) }}（已付清）
+        {% elif lp.status == "overpaid" %}⚠️ 已付 ${{ "{:,}".format(lp.paid) }}（超額）
+        {% elif lp.status == "partial" %}⏳ 已付 ${{ "{:,}".format(lp.paid) }}，
+            差 ${{ "{:,}".format(lp.remaining) }}
+        {% else %}未付
+        {% endif %}
+        {% if lp.remaining > 0 %}
+        <form method="post" action="/settlement/pay" class="inline">
+          <input type="hidden" name="from_id" value="{{ lp.from_id }}">
+          <input type="hidden" name="to_id" value="{{ lp.to_id }}">
+          <input type="hidden" name="snapshot_id" value="{{ snapshot.snap.id }}">
+          <input type="number" name="amount" value="{{ lp.remaining }}"
+                 min="1" class="short">
+          <button type="submit">記錄付款</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
+  {% if snapshot.payments %}
+    <h3>已記錄的付款</h3>
+    <ul>
+      {% for p in snapshot.payments %}
+      <li>{{ p.date }} {{ names.get(p.payer_id, "?") }} →
+          {{ names.get(p.payee_id, "?") }} ${{ "{:,}".format(p.amount) }}
+        <form method="post" action="/payments/{{ p.id }}/undo" class="inline">
+          <button class="ghost">撤銷</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if snapshot.unplanned %}
+    <div class="alert">有 {{ snapshot.unplanned | length }} 筆付款不在方案內，請檢查。</div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

@@ -199,3 +199,56 @@ def test_delete_transfer():
     c.post("/transfers/1/delete")
     page = c.get("/transfers")
     assert "尚未有轉帳" in page.text
+
+
+def test_settlement_flow_with_partial_payment_and_stale():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "民宿", "category": "住宿", "amount": 300, "payer_id": 1,
+        "split_kind": "equal"})
+    # 即時方案：小華→小明 $100、小美→小明 $100
+    page = c.get("/settlement")
+    assert "小華" in page.text and "$100" in page.text
+
+    # 建立快照
+    r = c.post("/settlement/snapshot", follow_redirects=False)
+    assert r.status_code == 303
+    page = c.get("/settlement")
+    assert "付款進度" in page.text
+
+    # 部分付款 60/100 → partial
+    c.post("/settlement/pay", data={
+        "from_id": 2, "to_id": 1, "amount": 60, "snapshot_id": 1})
+    page = c.get("/settlement")
+    assert "已付 $60" in page.text
+
+    # 快照後修改帳目 → 過期警告
+    c.post("/expenses", data={
+        "name": "追加", "category": "雜支", "amount": 90, "payer_id": 2,
+        "split_kind": "equal"})
+    page = c.get("/settlement")
+    assert "已過期" in page.text
+
+
+def test_undo_payment():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "餐", "category": "餐費", "amount": 300, "payer_id": 1,
+        "split_kind": "equal"})
+    c.post("/settlement/snapshot")
+    c.post("/settlement/pay", data={
+        "from_id": 2, "to_id": 1, "amount": 100, "snapshot_id": 1})
+    # 找出付款分錄 id（expense=1 之後的下一筆 transfer）
+    page = c.get("/settlement")
+    assert "已付 $100" in page.text
+    c.post("/payments/2/undo")
+    page = c.get("/settlement")
+    assert "已付 $100" not in page.text
+
+
+def test_snapshot_requires_login():
+    app = create_app(db_path=":memory:", secret="test-secret")
+    c = TestClient(app)
+    _setup_group(c)
+    r = c.post("/settlement/snapshot", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login"

@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
-from splitbook.domain.ledger import compute_balances
+from splitbook.domain.ledger import compute_balances, simplify_debts
+from splitbook.domain.reconcile import by_collector, reconcile
 from splitbook.domain.split import (
     SplitError, split_equal, split_exact, split_weights)
 from splitbook.web.app import templates
@@ -279,3 +280,89 @@ def delete_transfer_route(request: Request, eid: int):
             "transfers.html",
             _transfers_context(request, repo, gid, me, error=str(e)))
     return _redirect("/transfers")
+
+
+# -- settlement -----------------------------------------------------------
+def _live_plan(repo, gid):
+    members = repo.list_members(gid)
+    entries = repo.list_entries(gid)
+    balances = compute_balances({m["id"] for m in members}, entries)
+    return simplify_debts({mid: b.net for mid, b in balances.items()})
+
+
+@router.get("/settlement")
+def settlement_page(request: Request):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    members = repo.list_members(gid, include_inactive=True)
+    names = {m["id"]: m["name"] for m in members}
+    error = ""
+    plan = []
+    try:
+        plan = _live_plan(repo, gid)
+    except Exception as e:
+        error = str(e)
+    snap = repo.latest_snapshot(gid)
+    snapshot_view = None
+    if snap is not None:
+        payments = repo.payments_for_snapshot(snap.id)
+        progress, unplanned = reconcile(snap.lines, payments)
+        snapshot_view = {
+            "snap": snap,
+            "stale": repo.snapshot_is_stale(snap),
+            "collectors": by_collector(progress),
+            "unplanned": unplanned,
+            "payments": payments,
+        }
+    return templates.TemplateResponse("settlement.html", {
+        "request": request, "me": me, "names": names, "plan": plan,
+        "snapshot": snapshot_view, "error": error,
+        "active_tab": "settlement",
+    })
+
+
+@router.post("/settlement/snapshot")
+def create_snapshot_route(request: Request):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    repo.create_snapshot(gid, _live_plan(repo, gid), created_by=me["id"])
+    return _redirect("/settlement")
+
+
+@router.post("/settlement/pay")
+def record_payment_route(request: Request, from_id: int = Form(...),
+                         to_id: int = Form(...), amount: int = Form(...),
+                         snapshot_id: int = Form(...)):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    member_ids = {m["id"] for m in repo.list_members(gid)}
+    latest = repo.latest_snapshot(gid)
+    if (from_id not in member_ids or to_id not in member_ids
+            or latest is None or snapshot_id != latest.id):
+        return _redirect("/settlement")
+    try:
+        repo.record_transfer(gid, amount, from_id, to_id, "settlement",
+                             name="結算轉帳", created_by=me["id"],
+                             snapshot_id=snapshot_id)
+    except ValueError:
+        return _redirect("/settlement")
+    return _redirect("/settlement")
+
+
+@router.post("/payments/{eid}/undo")
+def undo_payment_route(request: Request, eid: int):
+    session = current(request)
+    if session is None:
+        return _redirect("/login")
+    repo, gid, me = session
+    try:
+        repo.soft_delete_entry(eid, gid)
+    except ValueError:
+        pass
+    return _redirect("/settlement")
