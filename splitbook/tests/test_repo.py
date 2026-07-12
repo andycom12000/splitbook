@@ -1,4 +1,5 @@
 import pytest
+from splitbook.domain.ledger import SettlementLine
 from splitbook.storage.db import connect, init_db
 
 
@@ -113,3 +114,51 @@ def test_transfer_roundtrip(repo, group):
     e = repo.list_entries(g["gid"])[0]
     assert e.kind == "transfer" and e.payer_id == g["b"] and e.payee_id == g["a"]
     assert e.transfer_kind == "prepay" and e.amount == 2300
+
+
+def test_snapshot_lifecycle(repo, group):
+    g = group
+    repo.record_expense(g["gid"], "民宿", 300, g["a"],
+                        {g["a"]: 100, g["b"]: 100, g["c"]: 100})
+    lines = [SettlementLine(g["b"], g["a"], 100),
+             SettlementLine(g["c"], g["a"], 100)]
+    sid = repo.create_snapshot(g["gid"], lines, created_by=g["a"])
+    snap = repo.latest_snapshot(g["gid"])
+    assert snap.id == sid and snap.created_by == g["a"]
+    assert set(snap.lines) == set(lines)
+    assert repo.snapshot_is_stale(snap) is False
+
+
+def test_snapshot_stale_after_expense_change(repo, group):
+    g = group
+    eid = repo.record_expense(g["gid"], "民宿", 300, g["a"],
+                              {g["a"]: 100, g["b"]: 100, g["c"]: 100})
+    sid = repo.create_snapshot(g["gid"], [SettlementLine(g["b"], g["a"], 100)])
+    snap = repo.latest_snapshot(g["gid"])
+    repo.soft_delete_entry(eid)  # 快照後修改帳目 → 過期
+    assert repo.snapshot_is_stale(snap) is True
+
+
+def test_settlement_payment_does_not_stale_snapshot(repo, group):
+    g = group
+    repo.record_expense(g["gid"], "民宿", 200, g["a"],
+                        {g["a"]: 100, g["b"]: 100})
+    sid = repo.create_snapshot(g["gid"], [SettlementLine(g["b"], g["a"], 100)])
+    snap = repo.latest_snapshot(g["gid"])
+    repo.record_transfer(g["gid"], 100, g["b"], g["a"], "settlement",
+                         snapshot_id=sid)
+    assert repo.snapshot_is_stale(snap) is False
+    payments = repo.payments_for_snapshot(sid)
+    assert len(payments) == 1 and payments[0].amount == 100
+
+
+def test_latest_snapshot_returns_newest(repo, group):
+    g = group
+    repo.record_expense(g["gid"], "x", 100, g["a"], {g["a"]: 100})
+    s1 = repo.create_snapshot(g["gid"], [])
+    s2 = repo.create_snapshot(g["gid"], [])
+    assert repo.latest_snapshot(g["gid"]).id == s2
+
+
+def test_latest_snapshot_none_when_empty(repo, group):
+    assert repo.latest_snapshot(group["gid"]) is None

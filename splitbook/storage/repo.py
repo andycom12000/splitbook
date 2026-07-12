@@ -184,3 +184,52 @@ class Repo:
         if row is None:
             return None
         return self._rows_to_entries([row])[0]
+
+    # -- snapshots ----------------------------------------------------
+    def create_snapshot(self, group_id: int, lines: list[SettlementLine],
+                        created_by: int | None = None) -> int:
+        row = self.conn.execute(
+            "SELECT COALESCE(MAX(rev), 0) AS r FROM entries WHERE group_id = ?",
+            (group_id,)).fetchone()
+        with self.conn:
+            cur = self.conn.execute(
+                "INSERT INTO snapshots (group_id, through_rev, created_by) "
+                "VALUES (?, ?, ?)",
+                (group_id, row["r"], created_by))
+            sid = cur.lastrowid
+            self.conn.executemany(
+                "INSERT INTO snapshot_lines "
+                "(snapshot_id, from_member, to_member, amount) "
+                "VALUES (?, ?, ?, ?)",
+                [(sid, l.from_id, l.to_id, l.amount) for l in lines])
+        return sid
+
+    def latest_snapshot(self, group_id: int) -> Snapshot | None:
+        row = self.conn.execute(
+            "SELECT * FROM snapshots WHERE group_id = ? "
+            "ORDER BY id DESC LIMIT 1", (group_id,)).fetchone()
+        if row is None:
+            return None
+        lines = [SettlementLine(r["from_member"], r["to_member"], r["amount"])
+                 for r in self.conn.execute(
+                     "SELECT * FROM snapshot_lines WHERE snapshot_id = ?",
+                     (row["id"],))]
+        return Snapshot(id=row["id"], group_id=row["group_id"],
+                        through_rev=row["through_rev"],
+                        created_by=row["created_by"],
+                        created_at=row["created_at"], lines=lines)
+
+    def snapshot_is_stale(self, snapshot: Snapshot) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM entries WHERE group_id = ? AND rev > ? "
+            "AND NOT (kind = 'transfer' AND transfer_kind = 'settlement') "
+            "LIMIT 1",
+            (snapshot.group_id, snapshot.through_rev)).fetchone()
+        return row is not None
+
+    def payments_for_snapshot(self, snapshot_id: int) -> list[Entry]:
+        rows = self.conn.execute(
+            "SELECT * FROM entries WHERE snapshot_id = ? "
+            "AND transfer_kind = 'settlement' AND deleted_at IS NULL "
+            "ORDER BY id", (snapshot_id,)).fetchall()
+        return self._rows_to_entries(rows)
