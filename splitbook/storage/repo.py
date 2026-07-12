@@ -2,7 +2,9 @@
 import sqlite3
 import threading
 from dataclasses import dataclass
+from datetime import date
 
+from splitbook.domain import recurrence
 from splitbook.domain.ledger import Entry, SettlementLine
 
 
@@ -49,12 +51,18 @@ class Repo:
             "SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
 
     # -- members ------------------------------------------------------
-    def add_member(self, group_id: int, name: str) -> int:
+    def add_member(self, group_id: int, name: str, color: str = "") -> int:
         with self._write_lock, self.conn:
             cur = self.conn.execute(
-                "INSERT INTO members (group_id, name) VALUES (?, ?)",
-                (group_id, name))
+                "INSERT INTO members (group_id, name, color) VALUES (?, ?, ?)",
+                (group_id, name, color))
         return cur.lastrowid
+
+    def set_member_color(self, member_id: int, color: str) -> None:
+        with self._write_lock, self.conn:
+            self.conn.execute(
+                "UPDATE members SET color = ? WHERE id = ?",
+                (color, member_id))
 
     def list_members(self, group_id: int,
                      include_inactive: bool = False) -> list[sqlite3.Row]:
@@ -89,7 +97,8 @@ class Repo:
     def record_expense(self, group_id: int, name: str, amount: int,
                        payer_id: int, allocations: dict[int, int],
                        category: str = "", date: str = "", note: str = "",
-                       created_by: int | None = None) -> int:
+                       created_by: int | None = None,
+                       template_id: int | None = None) -> int:
         if sum(allocations.values()) != amount:
             raise ValueError(
                 f"分攤總和 {sum(allocations.values())} 不等於總金額 {amount}")
@@ -100,11 +109,11 @@ class Repo:
             cur = self.conn.execute(
                 """INSERT INTO entries
                    (group_id, rev, kind, name, amount, payer_id, category,
-                    date, note, created_by)
+                    date, note, created_by, template_id)
                    VALUES (?, ?, 'expense', ?, ?, ?, ?,
-                           COALESCE(?, date('now', 'localtime')), ?, ?)""",
+                           COALESCE(?, date('now', 'localtime')), ?, ?, ?)""",
                 (group_id, self._next_rev(group_id), name, amount, payer_id,
-                 category, date or None, note, created_by))
+                 category, date or None, note, created_by, template_id))
             eid = cur.lastrowid
             self.conn.executemany(
                 "INSERT INTO allocations (entry_id, member_id, amount) VALUES (?, ?, ?)",
@@ -259,3 +268,136 @@ class Repo:
             "AND transfer_kind = 'settlement' AND deleted_at IS NULL "
             "ORDER BY id", (snapshot_id,)).fetchall()
         return self._rows_to_entries(rows)
+
+    # -- shopping items -------------------------------------------------
+    def add_shopping_item(self, group_id: int, name: str, added_by: int,
+                          estimate: int | None = None,
+                          note: str = "") -> int:
+        self._assert_members(group_id, {added_by})
+        if estimate is not None and estimate <= 0:
+            raise ValueError("預估金額必須為正整數")
+        with self._write_lock, self.conn:
+            cur = self.conn.execute(
+                """INSERT INTO shopping_items
+                   (group_id, name, note, estimate, added_by)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (group_id, name, note, estimate, added_by))
+        return cur.lastrowid
+
+    def list_open_items(self, group_id: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM shopping_items WHERE group_id = ? "
+            "AND deleted_at IS NULL AND bought_at IS NULL "
+            "ORDER BY id", (group_id,)).fetchall()
+
+    def list_bought_items(self, group_id: int,
+                          days: int = 7) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM shopping_items WHERE group_id = ? "
+            "AND deleted_at IS NULL AND bought_at IS NOT NULL "
+            "AND bought_at >= datetime('now', 'localtime', ?) "
+            "ORDER BY bought_at DESC, id DESC",
+            (group_id, f"-{days} days")).fetchall()
+
+    def get_items(self, group_id: int,
+                  item_ids: list[int]) -> list[sqlite3.Row]:
+        if not item_ids:
+            return []
+        ph = ",".join("?" * len(item_ids))
+        return self.conn.execute(
+            f"SELECT * FROM shopping_items WHERE group_id = ? "
+            f"AND deleted_at IS NULL AND bought_at IS NULL "
+            f"AND id IN ({ph}) ORDER BY id",
+            (group_id, *item_ids)).fetchall()
+
+    def mark_items_bought(self, group_id: int, item_ids: list[int],
+                          entry_id: int | None) -> None:
+        wanted = set(item_ids)
+        if not wanted:
+            return
+        valid = {r["id"] for r in self.get_items(group_id, list(wanted))}
+        invalid = wanted - valid
+        if invalid:
+            raise ValueError(f"清單項目 {sorted(invalid)} 無法結帳")
+        with self._write_lock, self.conn:
+            ph = ",".join("?" * len(item_ids))
+            self.conn.execute(
+                f"""UPDATE shopping_items
+                    SET bought_at = datetime('now', 'localtime'),
+                        entry_id = ?
+                    WHERE id IN ({ph})""",
+                (entry_id, *item_ids))
+
+    def delete_shopping_item(self, item_id: int, group_id: int) -> None:
+        row = self.conn.execute(
+            "SELECT id FROM shopping_items WHERE id = ? AND group_id = ? "
+            "AND deleted_at IS NULL", (item_id, group_id)).fetchone()
+        if row is None:
+            raise ValueError(f"找不到清單項目 {item_id}")
+        with self._write_lock, self.conn:
+            self.conn.execute(
+                "UPDATE shopping_items SET deleted_at = datetime('now', 'localtime') "
+                "WHERE id = ?", (item_id,))
+
+    # -- recurring templates ----------------------------------------------
+    def add_template(self, group_id: int, name: str, payer_id: int,
+                     cycle: str, cycle_day: int, next_due: str,
+                     amount: int | None = None, category: str = "",
+                     split_kind: str = "equal",
+                     split_data: str = "{}") -> int:
+        self._assert_members(group_id, {payer_id})
+        if amount is not None and amount <= 0:
+            raise ValueError("金額必須為正整數")
+        with self._write_lock, self.conn:
+            cur = self.conn.execute(
+                """INSERT INTO recurring_templates
+                   (group_id, name, category, amount, payer_id, split_kind,
+                    split_data, cycle, cycle_day, next_due)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (group_id, name, category, amount, payer_id, split_kind,
+                 split_data, cycle, cycle_day, next_due))
+        return cur.lastrowid
+
+    def list_templates(self, group_id: int,
+                       include_inactive: bool = False) -> list[sqlite3.Row]:
+        sql = "SELECT * FROM recurring_templates WHERE group_id = ?"
+        if not include_inactive:
+            sql += " AND active = 1"
+        return self.conn.execute(
+            sql + " ORDER BY next_due, id", (group_id,)).fetchall()
+
+    def get_template(self, template_id: int,
+                     group_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM recurring_templates WHERE id = ? AND group_id = ?",
+            (template_id, group_id)).fetchone()
+
+    def set_template_active(self, template_id: int, group_id: int,
+                            active: bool) -> None:
+        row = self.get_template(template_id, group_id)
+        if row is None:
+            raise ValueError(f"找不到定期項目 {template_id}")
+        with self._write_lock, self.conn:
+            self.conn.execute(
+                "UPDATE recurring_templates SET active = ? WHERE id = ?",
+                (1 if active else 0, template_id))
+
+    def due_templates(self, group_id: int, today: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM recurring_templates WHERE group_id = ? "
+            "AND active = 1 AND next_due <= ? ORDER BY next_due, id",
+            (group_id, today)).fetchall()
+
+    def advance_template(self, template_id: int, group_id: int) -> str:
+        row = self.get_template(template_id, group_id)
+        if row is None:
+            raise ValueError(f"找不到定期項目 {template_id}")
+        new_due = recurrence.advance_due(
+            date.fromisoformat(row["next_due"]), row["cycle"],
+            row["cycle_day"])
+        new_due_str = new_due.isoformat()
+        with self._write_lock, self.conn:
+            self.conn.execute(
+                "UPDATE recurring_templates SET next_due = ? WHERE id = ?",
+                (new_due_str, template_id))
+        return new_due_str

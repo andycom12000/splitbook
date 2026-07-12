@@ -204,3 +204,260 @@ def test_record_transfer_rejects_foreign_to_id(repo, group):
     foreign = repo.add_member(other_gid, "阿強")
     with pytest.raises(ValueError, match="不屬於此帳本"):
         repo.record_transfer(g["gid"], 100, g["a"], foreign, "prepay")
+
+
+# -- member color -------------------------------------------------------
+
+def test_add_member_with_color_readable_via_list_members(repo):
+    gid = repo.create_group("測試")
+    mid = repo.add_member(gid, "小明", color="#ff0000")
+    members = repo.list_members(gid)
+    assert members[0]["color"] == "#ff0000"
+
+
+def test_set_member_color(repo, group):
+    g = group
+    repo.set_member_color(g["a"], "#00ff00")
+    m = repo.get_member(g["a"])
+    assert m["color"] == "#00ff00"
+
+
+# -- shopping items -------------------------------------------------------
+
+def test_add_shopping_item_appears_in_open_list(repo, group):
+    g = group
+    iid = repo.add_shopping_item(g["gid"], "醬油", g["a"], estimate=100)
+    open_items = repo.list_open_items(g["gid"])
+    assert len(open_items) == 1
+    assert open_items[0]["id"] == iid
+    assert open_items[0]["name"] == "醬油"
+    assert open_items[0]["estimate"] == 100
+
+
+def test_add_shopping_item_rejects_foreign_added_by(repo, group):
+    g = group
+    other_gid = repo.create_group("北海道行")
+    foreign = repo.add_member(other_gid, "阿強")
+    with pytest.raises(ValueError, match="不屬於此帳本"):
+        repo.add_shopping_item(g["gid"], "醬油", foreign)
+
+
+def test_add_shopping_item_rejects_nonpositive_estimate(repo, group):
+    g = group
+    with pytest.raises(ValueError, match="預估金額必須為正整數"):
+        repo.add_shopping_item(g["gid"], "醬油", g["a"], estimate=0)
+
+
+def test_mark_items_bought_links_entry_and_moves_to_bought(repo, group):
+    g = group
+    i1 = repo.add_shopping_item(g["gid"], "醬油", g["a"])
+    i2 = repo.add_shopping_item(g["gid"], "味噌", g["a"])
+    eid = repo.record_expense(g["gid"], "超市", 300, g["a"], {g["a"]: 300})
+    repo.mark_items_bought(g["gid"], [i1, i2], eid)
+
+    open_items = repo.list_open_items(g["gid"])
+    assert open_items == []
+
+    bought = repo.list_bought_items(g["gid"])
+    assert {r["id"] for r in bought} == {i1, i2}
+    for r in bought:
+        assert r["entry_id"] == eid
+        assert r["bought_at"] is not None
+
+
+def test_mark_items_bought_rejects_item_from_other_group(repo, group):
+    g = group
+    other_gid = repo.create_group("北海道行")
+    other_member = repo.add_member(other_gid, "阿強")
+    foreign_item = repo.add_shopping_item(other_gid, "螃蟹", other_member)
+    with pytest.raises(ValueError, match="無法結帳"):
+        repo.mark_items_bought(g["gid"], [foreign_item], None)
+
+
+def test_mark_items_bought_rejects_already_bought_item(repo, group):
+    g = group
+    iid = repo.add_shopping_item(g["gid"], "醬油", g["a"])
+    repo.mark_items_bought(g["gid"], [iid], None)
+    with pytest.raises(ValueError, match="無法結帳"):
+        repo.mark_items_bought(g["gid"], [iid], None)
+
+
+def test_delete_shopping_item_removes_from_open_list(repo, group):
+    g = group
+    iid = repo.add_shopping_item(g["gid"], "醬油", g["a"])
+    repo.delete_shopping_item(iid, g["gid"])
+    assert repo.list_open_items(g["gid"]) == []
+
+
+def test_delete_shopping_item_not_found_raises(repo, group):
+    g = group
+    with pytest.raises(ValueError, match="找不到清單項目"):
+        repo.delete_shopping_item(99999, g["gid"])
+
+
+def test_get_items_only_returns_open_items_of_group(repo, group):
+    g = group
+    i1 = repo.add_shopping_item(g["gid"], "醬油", g["a"])
+    other_gid = repo.create_group("北海道行")
+    other_member = repo.add_member(other_gid, "阿強")
+    i2 = repo.add_shopping_item(other_gid, "螃蟹", other_member)
+    result = repo.get_items(g["gid"], [i1, i2])
+    assert {r["id"] for r in result} == {i1}
+
+
+# -- recurring templates ---------------------------------------------------
+
+def test_add_template_and_due_templates_includes_today(repo, group):
+    g = group
+    tid = repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                            next_due="2026-07-12", amount=10000)
+    due = repo.due_templates(g["gid"], today="2026-07-12")
+    assert [r["id"] for r in due] == [tid]
+
+
+def test_due_templates_excludes_future(repo, group):
+    g = group
+    repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                      next_due="2026-08-01", amount=10000)
+    due = repo.due_templates(g["gid"], today="2026-07-12")
+    assert due == []
+
+
+def test_due_templates_excludes_inactive(repo, group):
+    g = group
+    tid = repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                            next_due="2026-07-12", amount=10000)
+    repo.set_template_active(tid, g["gid"], False)
+    due = repo.due_templates(g["gid"], today="2026-07-12")
+    assert due == []
+
+
+def test_add_template_with_null_amount(repo, group):
+    g = group
+    tid = repo.add_template(g["gid"], "電費", g["a"], "monthly", 5,
+                            next_due="2026-07-05")
+    t = repo.get_template(tid, g["gid"])
+    assert t["amount"] is None
+
+
+def test_add_template_rejects_nonpositive_amount(repo, group):
+    g = group
+    with pytest.raises(ValueError, match="金額必須為正整數"):
+        repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                          next_due="2026-07-12", amount=0)
+
+
+def test_add_template_rejects_foreign_payer(repo, group):
+    g = group
+    other_gid = repo.create_group("北海道行")
+    foreign = repo.add_member(other_gid, "阿強")
+    with pytest.raises(ValueError, match="不屬於此帳本"):
+        repo.add_template(g["gid"], "房租", foreign, "monthly", 1,
+                          next_due="2026-07-12", amount=10000)
+
+
+def test_advance_template_moves_next_due_forward(repo, group):
+    g = group
+    tid = repo.add_template(g["gid"], "房租", g["a"], "monthly", 31,
+                            next_due="2026-01-31", amount=10000)
+    new_due = repo.advance_template(tid, g["gid"])
+    assert new_due == "2026-02-28"
+    t = repo.get_template(tid, g["gid"])
+    assert t["next_due"] == "2026-02-28"
+
+
+def test_advance_template_not_found_raises(repo, group):
+    g = group
+    with pytest.raises(ValueError, match="找不到定期項目"):
+        repo.advance_template(99999, g["gid"])
+
+
+def test_set_template_active_not_found_raises(repo, group):
+    g = group
+    with pytest.raises(ValueError, match="找不到定期項目"):
+        repo.set_template_active(99999, g["gid"], False)
+
+
+def test_get_template_wrong_group_returns_none(repo, group):
+    g = group
+    tid = repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                            next_due="2026-07-12", amount=10000)
+    other_gid = repo.create_group("北海道行")
+    assert repo.get_template(tid, other_gid) is None
+
+
+def test_list_templates_ordered_by_next_due(repo, group):
+    g = group
+    t2 = repo.add_template(g["gid"], "水費", g["a"], "monthly", 1,
+                           next_due="2026-08-01", amount=500)
+    t1 = repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                           next_due="2026-07-12", amount=10000)
+    templates = repo.list_templates(g["gid"])
+    assert [r["id"] for r in templates] == [t1, t2]
+
+
+# -- expense/template linkage ----------------------------------------------
+
+def test_record_expense_links_template_id(repo, group):
+    g = group
+    tid = repo.add_template(g["gid"], "房租", g["a"], "monthly", 1,
+                            next_due="2026-07-12", amount=10000)
+    eid = repo.record_expense(g["gid"], "房租", 10000, g["a"],
+                              {g["a"]: 5000, g["b"]: 5000, g["c"]: 0},
+                              template_id=tid)
+    row = repo.conn.execute(
+        "SELECT template_id FROM entries WHERE id = ?", (eid,)).fetchone()
+    assert row["template_id"] == tid
+
+
+# -- migration --------------------------------------------------------------
+
+def test_migration_adds_new_columns_to_legacy_db():
+    import sqlite3
+    from splitbook.storage.db import init_db
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript("""
+        CREATE TABLE groups (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
+        CREATE TABLE members (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id),
+            name TEXT NOT NULL,
+            pin_hash TEXT,
+            active INTEGER NOT NULL DEFAULT 1,
+            UNIQUE (group_id, name)
+        );
+        CREATE TABLE entries (
+            id INTEGER PRIMARY KEY,
+            group_id INTEGER NOT NULL REFERENCES groups(id),
+            rev INTEGER NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('expense', 'transfer')),
+            name TEXT NOT NULL,
+            amount INTEGER NOT NULL CHECK (amount != 0),
+            payer_id INTEGER NOT NULL REFERENCES members(id),
+            payee_id INTEGER REFERENCES members(id),
+            transfer_kind TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT '',
+            date TEXT NOT NULL DEFAULT (date('now', 'localtime')),
+            note TEXT NOT NULL DEFAULT '',
+            created_by INTEGER REFERENCES members(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            deleted_at TEXT
+        );
+        """)
+    conn.commit()
+
+    init_db(conn)
+
+    member_cols = {r["name"] for r in
+                   conn.execute("PRAGMA table_info(members)").fetchall()}
+    entry_cols = {r["name"] for r in
+                  conn.execute("PRAGMA table_info(entries)").fetchall()}
+    assert "color" in member_cols
+    assert "template_id" in entry_cols
+    conn.close()
