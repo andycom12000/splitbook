@@ -118,14 +118,15 @@ class Repo:
     def update_expense(self, entry_id: int, name: str, amount: int,
                        payer_id: int, allocations: dict[int, int],
                        category: str = "", date: str = "",
-                       note: str = "") -> None:
+                       note: str = "", group_id: int | None = None) -> None:
         if sum(allocations.values()) != amount:
             raise ValueError(
                 f"分攤總和 {sum(allocations.values())} 不等於總金額 {amount}")
         row = self.conn.execute(
             "SELECT group_id, kind, deleted_at FROM entries WHERE id = ?",
             (entry_id,)).fetchone()
-        if row is None or row["kind"] != "expense" or row["deleted_at"]:
+        if (row is None or row["kind"] != "expense" or row["deleted_at"]
+                or (group_id is not None and row["group_id"] != group_id)):
             raise ValueError(f"找不到可編輯的支出分錄 {entry_id}")
         with self.conn:
             self.conn.execute(
@@ -141,11 +142,13 @@ class Repo:
                 "INSERT INTO allocations (entry_id, member_id, amount) VALUES (?, ?, ?)",
                 [(entry_id, mid, a) for mid, a in allocations.items()])
 
-    def soft_delete_entry(self, entry_id: int) -> None:
+    def soft_delete_entry(self, entry_id: int,
+                          group_id: int | None = None) -> None:
         row = self.conn.execute(
             "SELECT group_id, deleted_at FROM entries WHERE id = ?",
             (entry_id,)).fetchone()
-        if row is None or row["deleted_at"]:
+        if (row is None or row["deleted_at"]
+                or (group_id is not None and row["group_id"] != group_id)):
             raise ValueError(f"找不到分錄 {entry_id}")
         with self.conn:
             self.conn.execute(
@@ -177,10 +180,14 @@ class Repo:
             "ORDER BY id", (group_id,)).fetchall()
         return self._rows_to_entries(rows)
 
-    def get_entry(self, entry_id: int) -> Entry | None:
-        row = self.conn.execute(
-            "SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL",
-            (entry_id,)).fetchone()
+    def get_entry(self, entry_id: int,
+                  group_id: int | None = None) -> Entry | None:
+        sql = "SELECT * FROM entries WHERE id = ? AND deleted_at IS NULL"
+        params = [entry_id]
+        if group_id is not None:
+            sql += " AND group_id = ?"
+            params.append(group_id)
+        row = self.conn.execute(sql, params).fetchone()
         if row is None:
             return None
         return self._rows_to_entries([row])[0]

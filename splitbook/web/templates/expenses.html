@@ -34,9 +34,9 @@
 
   <fieldset>
     <legend>分攤方式</legend>
-    <label class="radio"><input type="radio" name="split_kind" value="equal" checked> 均分</label>
+    <label class="radio"><input type="radio" name="split_kind" value="equal" {{ 'checked' if not editing }}> 均分</label>
     <label class="radio"><input type="radio" name="split_kind" value="weights"> 依權重</label>
-    <label class="radio"><input type="radio" name="split_kind" value="exact"> 指定金額</label>
+    <label class="radio"><input type="radio" name="split_kind" value="exact" {{ 'checked' if editing }}> 指定金額</label>
     <table class="split-table">
       <tr><th>成員</th><th>參與(均分)</th><th>權重</th><th>金額(指定)</th></tr>
       {% for m in members %}
@@ -44,7 +44,8 @@
         <td>{{ m['name'] }}</td>
         <td><input type="checkbox" name="p_{{ m['id'] }}"></td>
         <td><input type="number" name="w_{{ m['id'] }}" min="0" class="short"></td>
-        <td><input type="number" name="x_{{ m['id'] }}" class="short"></td>
+        <td><input type="number" name="x_{{ m['id'] }}" class="short"
+              value="{{ (editing.allocations.get(m['id'], 0) or '') if editing else '' }}"></td>
       </tr>
       {% endfor %}
     </table>

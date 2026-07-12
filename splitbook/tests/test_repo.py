@@ -162,3 +162,28 @@ def test_latest_snapshot_returns_newest(repo, group):
 
 def test_latest_snapshot_none_when_empty(repo, group):
     assert repo.latest_snapshot(group["gid"]) is None
+
+
+def test_get_entry_wrong_group_id_returns_none(repo, group):
+    g = group
+    eid = repo.record_expense(g["gid"], "餐費", 100, g["a"], {g["a"]: 100})
+    other_gid = repo.create_group("北海道行")
+    assert repo.get_entry(eid, other_gid) is None
+    assert repo.get_entry(eid, g["gid"]) is not None
+
+
+def test_update_expense_wrong_group_id_raises(repo, group):
+    g = group
+    eid = repo.record_expense(g["gid"], "餐費", 100, g["a"], {g["a"]: 100})
+    other_gid = repo.create_group("北海道行")
+    with pytest.raises(ValueError):
+        repo.update_expense(eid, "改", 100, g["a"], {g["a"]: 100},
+                            group_id=other_gid)
+
+
+def test_soft_delete_entry_wrong_group_id_raises(repo, group):
+    g = group
+    eid = repo.record_expense(g["gid"], "餐費", 100, g["a"], {g["a"]: 100})
+    other_gid = repo.create_group("北海道行")
+    with pytest.raises(ValueError):
+        repo.soft_delete_entry(eid, group_id=other_gid)

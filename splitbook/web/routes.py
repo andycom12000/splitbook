@@ -146,13 +146,21 @@ def parse_split(form, member_ids: list[int], amount: int,
     raise SplitError(f"未知的分攤規則 {kind!r}")
 
 
-def _expenses_context(request, repo, gid, me, error=""):
+def _expenses_context(request, repo, gid, me, error="", editing_id=None):
     members = repo.list_members(gid)
     names = {m["id"]: m["name"] for m in members}
     expenses = [e for e in repo.list_entries(gid) if e.kind == "expense"]
     expenses.sort(key=lambda e: (e.date, e.id), reverse=True)
-    edit_id = request.query_params.get("edit")
-    editing = repo.get_entry(int(edit_id)) if edit_id else None
+    if editing_id is not None:
+        editing = repo.get_entry(editing_id, gid)
+    else:
+        edit_id = request.query_params.get("edit")
+        editing = None
+        if edit_id is not None:
+            try:
+                editing = repo.get_entry(int(edit_id), gid)
+            except (TypeError, ValueError):
+                editing = None
     return {"request": request, "me": me, "members": members, "names": names,
             "expenses": expenses, "editing": editing, "error": error,
             "categories": CATEGORIES, "active_tab": "expenses"}
@@ -186,11 +194,12 @@ async def _handle_expense_form(request, entry_id: int | None):
         if entry_id is None:
             repo.record_expense(gid, created_by=me["id"], **kwargs)
         else:
-            repo.update_expense(entry_id, **kwargs)
+            repo.update_expense(entry_id, group_id=gid, **kwargs)
     except (SplitError, ValueError, KeyError) as e:
         return templates.TemplateResponse(
             "expenses.html",
-            _expenses_context(request, repo, gid, me, error=str(e)))
+            _expenses_context(request, repo, gid, me, error=str(e),
+                              editing_id=entry_id))
     return _redirect("/expenses")
 
 
@@ -210,5 +219,10 @@ def delete_expense_route(request: Request, eid: int):
     if session is None:
         return _redirect("/login")
     repo, gid, me = session
-    repo.soft_delete_entry(eid)
+    try:
+        repo.soft_delete_entry(eid, gid)
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "expenses.html",
+            _expenses_context(request, repo, gid, me, error=str(e)))
     return _redirect("/expenses")

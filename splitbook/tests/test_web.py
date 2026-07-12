@@ -123,3 +123,49 @@ def test_expense_requires_login():
     _setup_group(c)
     r = c.get("/expenses", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
+
+
+def test_expenses_edit_with_invalid_id_does_not_500():
+    c = _logged_in_client()
+    r = c.get("/expenses?edit=abc")
+    assert r.status_code == 200
+
+
+def test_expenses_edit_prefill_shows_exact_split():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "門票", "category": "票券", "amount": 100, "payer_id": 1,
+        "split_kind": "exact", "x_1": 60, "x_2": 40})
+    page = c.get("/expenses?edit=1")
+    assert page.status_code == 200
+    assert 'value="60"' in page.text
+    assert 'value="40"' in page.text
+    assert 'value="exact" checked' in page.text
+
+
+def test_cross_group_update_and_delete_blocked_and_no_leak():
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "民宿", "category": "住宿", "amount": 300, "payer_id": 1,
+        "split_kind": "equal"})
+    # 建立第二個帳本（不同 group），成員 id 會是 4
+    c.post("/setup", data={"group_name": "北海道行", "member1": "阿強"},
+          follow_redirects=False)
+    _login(c, member_id=4, pin="5678")
+
+    r1 = c.post("/expenses/1/update", data={
+        "name": "偷改", "amount": 999, "payer_id": 4, "split_kind": "equal"})
+    assert r1.status_code == 200
+    assert "偷改" not in r1.text
+
+    r2 = c.post("/expenses/1/delete")
+    assert r2.status_code == 200
+
+    edit_page = c.get("/expenses?edit=1")
+    assert edit_page.status_code == 200
+    assert "民宿" not in edit_page.text
+
+    # 換回原帳本成員，確認帳目完好無缺
+    _login(c, member_id=1, pin="1234")
+    page = c.get("/expenses")
+    assert "民宿" in page.text
