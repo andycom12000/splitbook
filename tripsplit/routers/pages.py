@@ -3,14 +3,15 @@ from deps import templates
 
 router = APIRouter()
 
+CATEGORIES = ["民宿", "餐費", "保險", "酒水", "雜支"]
+
 
 @router.get("/")
 def members_page(request: Request, filter: str = "all"):
     try:
-        from services.notion import get_all_members, get_all_expenses
+        from services.notion import get_all_data
         from services.settlement import compute_settlement
-        members = get_all_members()
-        expenses = get_all_expenses()
+        members, expenses, txns = get_all_data()
     except Exception as e:
         return templates.TemplateResponse("members.html", {
             "request": request, "members": [], "error": str(e),
@@ -19,8 +20,7 @@ def members_page(request: Request, filter: str = "all"):
             "active_tab": "members",
         })
 
-    # Compute settlement to get net balances
-    result = compute_settlement(members, expenses) if expenses else None
+    result = compute_settlement(members, expenses, txns) if expenses else None
 
     if result:
         for m in members:
@@ -28,10 +28,12 @@ def members_page(request: Request, filter: str = "all"):
             m["owes"] = totals.get("owes", 0)
             m["owed"] = totals.get("owed", 0)
             m["net"] = totals.get("net", 0)
+            m["paid_out"] = totals.get("paid_out", 0)
+            m["total_contributed"] = totals.get("total_contributed", 0)
             m["details"] = totals.get("details", [])
     else:
         for m in members:
-            m["owes"] = m["owed"] = m["net"] = 0
+            m["owes"] = m["owed"] = m["net"] = m["paid_out"] = m["total_contributed"] = 0
             m["details"] = []
 
     needs_payment = [m for m in members if m["payment_status"] != "已繳"]
@@ -40,7 +42,6 @@ def members_page(request: Request, filter: str = "all"):
     total_count = len(members)
     paid_count = len(paid)
 
-    # Apply filter for full-page requests (desktop filter links)
     if filter == "unpaid":
         members = needs_payment
     elif filter == "paid":
@@ -89,21 +90,26 @@ def expenses_page(request: Request):
             "active_tab": "expenses",
         })
 
-    # Resolve payer names
     members_by_id = {m["id"]: m for m in members}
+    tag_index: dict[str, set[str]] = {}
+    for m in members:
+        for tag in m["tags"]:
+            tag_index.setdefault(tag, set()).add(m["id"])
+
+    all_member_ids = set(m["id"] for m in members)
     for exp in expenses:
         payer = members_by_id.get(exp["payer_id"])
         exp["payer_name"] = payer["name"] if payer else "未知"
-        # Compute per-person split (blacklist mode: all members minus excluded)
         if exp["tags"]:
-            excluded = set(m["id"] for m in members if any(t in m["tags"] for t in exp["tags"]))
-            participant_count = len(members) - len(excluded)
+            excluded = set()
+            for tag in exp["tags"]:
+                excluded |= tag_index.get(tag, set())
+            participant_count = len(all_member_ids) - len(excluded)
         else:
-            participant_count = len(members)
+            participant_count = len(all_member_ids)
         exp["per_person"] = exp["amount"] // participant_count if participant_count > 0 else 0
         exp["participant_count"] = participant_count
 
-    # Sort by date descending
     expenses.sort(key=lambda x: x.get("date", ""), reverse=True)
 
     return templates.TemplateResponse("expenses.html", {
@@ -127,31 +133,24 @@ def settlement_page(request: Request):
 @router.get("/htmx/expense-form")
 def htmx_expense_form(request: Request, id: str = None):
     try:
-        from services.notion import get_all_members, get_all_expenses
+        from services.notion import get_all_members, get_all_expenses, get_tag_options
         members = get_all_members()
         expense = None
         if id:
             expenses = get_all_expenses()
             expense = next((e for e in expenses if e["id"] == id), None)
+        all_tags = get_tag_options()
+        if not all_tags:
+            all_tags = sorted(set(t for m in members for t in m["tags"]))
     except Exception as e:
         print(f"[htmx_expense_form] Notion error: {e}")
         members = []
         expense = None
-    # Get all exclusion tag options from Notion DB schema
-    try:
-        from notion_client import Client
-        from config import NOTION_TOKEN, NOTION_MEMBERS_DB_ID
-        notion = Client(auth=NOTION_TOKEN)
-        db = notion.databases.retrieve(database_id=NOTION_MEMBERS_DB_ID)
-        tag_prop = db["properties"].get("參與標籤", {})
-        all_tags = [opt["name"] for opt in tag_prop.get("multi_select", {}).get("options", [])]
-    except Exception:
-        # Fallback: collect from members
-        all_tags = sorted(set(t for m in members for t in m["tags"]))
+        all_tags = []
     return templates.TemplateResponse("partials/expense_form.html", {
         "request": request,
         "members": members,
         "expense": expense,
         "all_tags": all_tags,
-        "categories": ["民宿", "餐費", "保險", "酒水", "雜支"],
+        "categories": CATEGORIES,
     })

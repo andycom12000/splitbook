@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.notion import parse_member, parse_expense, build_member_update
+from services.notion import parse_member, parse_expense, parse_transaction, build_member_update
 
 
 def test_parse_member():
@@ -12,7 +12,6 @@ def test_parse_member():
             "出席狀態": {"status": {"name": "已付款"}},
             "房間": {"select": {"name": "A01"}},
             "參與標籤": {"multi_select": [{"name": "不喝酒"}]},
-            "已付款項": {"number": 2300},
         },
     }
     result = parse_member(page)
@@ -21,7 +20,6 @@ def test_parse_member():
     assert result["payment_status"] == "已付款"
     assert result["room"] == "A01"
     assert result["tags"] == ["不喝酒"]
-    assert result["prepaid"] == 2300
 
 
 def test_parse_expense():
@@ -48,6 +46,26 @@ def test_parse_expense():
     assert result["note"] == "兩棟民宿"
 
 
+def test_parse_transaction():
+    page = {
+        "id": "txn-id-1",
+        "properties": {
+            "備註": {"title": [{"plain_text": "預付款 - 王小明"}]},
+            "付款人": {"relation": [{"id": "page-id-1"}]},
+            "收款人": {"relation": [{"id": "page-id-2"}]},
+            "金額": {"number": 2300},
+            "類型": {"select": {"name": "預付款"}},
+            "日期": {"date": {"start": "2026-03-01"}},
+        },
+    }
+    result = parse_transaction(page)
+    assert result["id"] == "txn-id-1"
+    assert result["from_id"] == "page-id-1"
+    assert result["to_id"] == "page-id-2"
+    assert result["amount"] == 2300
+    assert result["type"] == "預付款"
+
+
 def test_build_member_update():
     update = build_member_update(
         total_owes=4660,
@@ -62,7 +80,6 @@ def test_build_member_update():
 
 
 def test_parse_member_missing_fields():
-    """Missing optional fields should return defaults"""
     page = {
         "id": "page-id-2",
         "properties": {
@@ -74,4 +91,3 @@ def test_parse_member_missing_fields():
     assert result["payment_status"] == ""
     assert result["room"] == ""
     assert result["tags"] == []
-    assert result["prepaid"] == 0

@@ -38,16 +38,31 @@ def api_delete_expense(expense_id: str):
     return RedirectResponse("/expenses", status_code=303)
 
 
+# ---------------------------------------------------------------------------
+# Settlement
+# ---------------------------------------------------------------------------
+
+def _get_settlement():
+    """Fetch data + compute settlement (uses cache)."""
+    from services.notion import get_all_data
+    from services.settlement import compute_settlement
+    from services.cache import cache, SETTLEMENT
+
+    cached = cache.get(SETTLEMENT)
+    if cached is not None:
+        return cached
+
+    members, expenses, txns = get_all_data()
+    result = compute_settlement(members, expenses, txns)
+    data = (result, members)
+    cache.set(SETTLEMENT, data)
+    return data
+
+
 @router.post("/settle")
 def api_settle(request: Request):
-    from services.notion import get_all_members, get_all_expenses
-    from services.settlement import compute_settlement
     from deps import templates
-
-    members = get_all_members()
-    expenses = get_all_expenses()
-    result = compute_settlement(members, expenses)
-
+    result, members = _get_settlement()
     return templates.TemplateResponse("partials/settlement_result.html", {
         "request": request,
         "result": result,
@@ -57,24 +72,76 @@ def api_settle(request: Request):
 
 @router.post("/settle/write")
 def api_settle_write():
-    from services.notion import get_all_members, get_all_expenses, build_member_update, write_settlement_batch
-    from services.settlement import compute_settlement, build_settlement_instructions
+    from services.notion import build_member_update, write_settlement_batch, get_all_transactions
+    from services.settlement import build_settlement_instructions
 
-    members = get_all_members()
-    expenses = get_all_expenses()
-    result = compute_settlement(members, expenses)
+    result, members = _get_settlement()
+
+    # Build paid_map from 結算轉帳 records: (from_id, to_id) -> total paid
+    all_txns = get_all_transactions()
+    paid_map: dict[tuple, int] = {}
+    for t in all_txns:
+        if t["type"] == "結算轉帳":
+            key = (t["from_id"], t["to_id"])
+            paid_map[key] = paid_map.get(key, 0) + t["amount"]
 
     updates = []
     for mid, totals in result["member_totals"].items():
-        instruction_text = build_settlement_instructions(mid, result["transactions"])
+        instruction_text = build_settlement_instructions(mid, result["transactions"], paid_map)
         props = build_member_update(
             total_owes=totals["owes"],
-            total_paid=totals["owed"],
+            total_paid=totals["total_contributed"],
             net=totals["net"],
             settlement_instruction=instruction_text,
             details=totals["details"],
         )
         updates.append({"page_id": mid, "properties": props})
 
-    write_result = write_settlement_batch(updates)
+    write_settlement_batch(updates)
     return RedirectResponse("/settlement?written=1", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Payment tracking (匯款紀錄)
+# ---------------------------------------------------------------------------
+
+@router.post("/payments")
+def api_create_payment(
+    request: Request,
+    from_id: str = Form(...),
+    to_id: str = Form(...),
+    amount: int = Form(..., gt=0),
+):
+    from services.notion import create_payment
+    create_payment(from_id, to_id, amount)
+    return _render_payment_progress(request)
+
+
+@router.post("/payments/{txn_id}/undo")
+def api_undo_payment(request: Request, txn_id: str):
+    from services.notion import delete_transaction
+    delete_transaction(txn_id)
+    return _render_payment_progress(request)
+
+
+@router.get("/payments/progress")
+def api_payment_progress(request: Request):
+    return _render_payment_progress(request)
+
+
+def _render_payment_progress(request: Request):
+    from services.notion import get_all_data
+    from services.settlement import compute_settlement, compute_payment_progress
+    from deps import templates
+
+    members, expenses, txns = get_all_data()
+    result = compute_settlement(members, expenses, txns)
+    members_by_id = {m["id"]: m for m in members}
+
+    payment_records = [t for t in txns if t["type"] == "結算轉帳"]
+    progress = compute_payment_progress(result["transactions"], payment_records, members_by_id)
+
+    return templates.TemplateResponse("partials/payment_progress.html", {
+        "request": request,
+        "progress": progress,
+    })

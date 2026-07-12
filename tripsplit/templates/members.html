@@ -86,11 +86,10 @@
       <thead>
         <tr class="border-b border-border-def text-left text-xs text-txt-muted uppercase tracking-wider">
           <th class="px-4 py-3 font-medium">成員</th>
-          <th class="px-4 py-3 font-medium">房間</th>
           <th class="px-4 py-3 font-medium">標籤</th>
-          <th class="px-4 py-3 font-medium text-right">已繳款項</th>
-          <th class="px-4 py-3 font-medium text-right">代墊費用</th>
-          <th class="px-4 py-3 font-medium text-right">應付份額</th>
+          <th class="px-4 py-3 font-medium text-right">已預繳</th>
+          <th class="px-4 py-3 font-medium text-right">代墊</th>
+          <th class="px-4 py-3 font-medium text-right">應付</th>
           <th class="px-4 py-3 font-medium text-right">淨餘額</th>
           <th class="px-4 py-3 font-medium text-center">狀態</th>
         </tr>
@@ -106,7 +105,6 @@
               <span class="font-medium text-txt-primary">{{ m.name }}</span>
             </div>
           </td>
-          <td class="px-4 py-3 text-txt-muted">{{ m.room }}</td>
           <td class="px-4 py-3">
             <div class="flex flex-wrap gap-1">
               {% for tag in m.tags %}
@@ -115,8 +113,8 @@
             </div>
           </td>
           <td class="px-4 py-3 text-right">
-            {% if m.prepaid > 0 %}
-            <span class="font-mono text-amt-positive">${{ "{:,}".format(m.prepaid) }}</span>
+            {% if m.paid_out > 0 %}
+            <span class="font-mono text-amt-positive">${{ "{:,}".format(m.paid_out) }}</span>
             {% else %}
             <span class="font-mono text-txt-muted">-</span>
             {% endif %}
@@ -171,7 +169,6 @@
           </div>
           <div>
             <div class="text-sm font-semibold text-white">{{ m.name }}</div>
-            <div class="text-xs text-gray-500">{{ m.room }}</div>
           </div>
         </div>
         {% if m.payment_status == "已繳" %}
@@ -188,15 +185,15 @@
         {% endfor %}
       </div>
       <div class="border-t border-gray-700 pt-2 mt-2 w-full">
-        {% if m.prepaid > 0 %}
+        {% if m.paid_out > 0 %}
         <div class="flex justify-between text-xs">
-          <span class="text-gray-500">已繳款項</span>
-          <span class="amount amount-positive">${{ "{:,}".format(m.prepaid) }}</span>
+          <span class="text-gray-500">已預繳</span>
+          <span class="amount amount-positive">${{ "{:,}".format(m.paid_out) }}</span>
         </div>
         {% endif %}
         {% if m.owed > 0 %}
         <div class="flex justify-between text-xs">
-          <span class="text-gray-500">代墊費用</span>
+          <span class="text-gray-500">代墊</span>
           <span class="amount amount-positive">${{ "{:,}".format(m.owed) }}</span>
         </div>
         {% endif %}
