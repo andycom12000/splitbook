@@ -187,3 +187,20 @@ def test_soft_delete_entry_wrong_group_id_raises(repo, group):
     other_gid = repo.create_group("北海道行")
     with pytest.raises(ValueError):
         repo.soft_delete_entry(eid, group_id=other_gid)
+
+
+def test_record_expense_rejects_foreign_allocation_member(repo, group):
+    g = group
+    other_gid = repo.create_group("北海道行")
+    foreign = repo.add_member(other_gid, "阿強")
+    with pytest.raises(ValueError, match="不屬於此帳本"):
+        repo.record_expense(g["gid"], "民宿", 200, g["a"],
+                            {g["a"]: 100, foreign: 100})
+
+
+def test_record_transfer_rejects_foreign_to_id(repo, group):
+    g = group
+    other_gid = repo.create_group("北海道行")
+    foreign = repo.add_member(other_gid, "阿強")
+    with pytest.raises(ValueError, match="不屬於此帳本"):
+        repo.record_transfer(g["gid"], 100, g["a"], foreign, "prepay")

@@ -1,4 +1,6 @@
 """全部路由。薄層：解析表單 → repo/domain → 模板。"""
+import sqlite3
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
@@ -91,7 +93,8 @@ def login_submit(request: Request, member_id: int = Form(...),
     token = make_token(member["group_id"], member_id,
                        request.app.state.secret)
     resp = _redirect("/")
-    resp.set_cookie("session", token, httponly=True, max_age=2592000)
+    resp.set_cookie("session", token, httponly=True, samesite="lax",
+                    max_age=2592000)
     return resp
 
 
@@ -196,7 +199,7 @@ async def _handle_expense_form(request, entry_id: int | None):
             repo.record_expense(gid, created_by=me["id"], **kwargs)
         else:
             repo.update_expense(entry_id, group_id=gid, **kwargs)
-    except (SplitError, ValueError, KeyError) as e:
+    except (SplitError, ValueError, KeyError, sqlite3.IntegrityError) as e:
         return templates.TemplateResponse(
             "expenses.html",
             _expenses_context(request, repo, gid, me, error=str(e),
@@ -260,7 +263,7 @@ def create_transfer_route(request: Request, from_id: int = Form(...),
     try:
         repo.record_transfer(gid, amount, from_id, to_id, "prepay",
                              name="預付款", note=note, created_by=me["id"])
-    except ValueError as e:
+    except (ValueError, sqlite3.IntegrityError) as e:
         return templates.TemplateResponse(
             "transfers.html",
             _transfers_context(request, repo, gid, me, error=str(e)))
@@ -329,7 +332,11 @@ def create_snapshot_route(request: Request):
     if session is None:
         return _redirect("/login")
     repo, gid, me = session
-    repo.create_snapshot(gid, _live_plan(repo, gid), created_by=me["id"])
+    try:
+        plan = _live_plan(repo, gid)
+    except Exception:
+        return _redirect("/settlement")
+    repo.create_snapshot(gid, plan, created_by=me["id"])
     return _redirect("/settlement")
 
 

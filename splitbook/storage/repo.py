@@ -1,5 +1,6 @@
 """Repository：所有 SQLite 存取集中於此。寫入時固化分攤、單調 rev 序號。"""
 import sqlite3
+import threading
 from dataclasses import dataclass
 
 from splitbook.domain.ledger import Entry, SettlementLine
@@ -18,10 +19,23 @@ class Snapshot:
 class Repo:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        self._write_lock = threading.Lock()
+
+    def _assert_members(self, group_id: int, member_ids) -> None:
+        """驗證 member_ids 全部屬於該帳本（含 inactive）；否則 raise ValueError。"""
+        wanted = set(member_ids)
+        if not wanted:
+            return
+        rows = self.conn.execute(
+            "SELECT id FROM members WHERE group_id = ?", (group_id,)).fetchall()
+        known = {r["id"] for r in rows}
+        unknown = wanted - known
+        if unknown:
+            raise ValueError(f"成員 {sorted(unknown)} 不屬於此帳本")
 
     # -- groups -------------------------------------------------------
     def create_group(self, name: str) -> int:
-        with self.conn:
+        with self._write_lock, self.conn:
             cur = self.conn.execute(
                 "INSERT INTO groups (name) VALUES (?)", (name,))
         return cur.lastrowid
@@ -36,7 +50,7 @@ class Repo:
 
     # -- members ------------------------------------------------------
     def add_member(self, group_id: int, name: str) -> int:
-        with self.conn:
+        with self._write_lock, self.conn:
             cur = self.conn.execute(
                 "INSERT INTO members (group_id, name) VALUES (?, ?)",
                 (group_id, name))
@@ -54,13 +68,13 @@ class Repo:
             "SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
 
     def set_pin_hash(self, member_id: int, pin_hash: str) -> None:
-        with self.conn:
+        with self._write_lock, self.conn:
             self.conn.execute(
                 "UPDATE members SET pin_hash = ? WHERE id = ?",
                 (pin_hash, member_id))
 
     def set_member_active(self, member_id: int, active: bool) -> None:
-        with self.conn:
+        with self._write_lock, self.conn:
             self.conn.execute(
                 "UPDATE members SET active = ? WHERE id = ?",
                 (1 if active else 0, member_id))
@@ -79,7 +93,10 @@ class Repo:
         if sum(allocations.values()) != amount:
             raise ValueError(
                 f"分攤總和 {sum(allocations.values())} 不等於總金額 {amount}")
-        with self.conn:
+        if amount == 0:
+            raise ValueError("金額不可為 0")
+        self._assert_members(group_id, {payer_id} | set(allocations))
+        with self._write_lock, self.conn:
             cur = self.conn.execute(
                 """INSERT INTO entries
                    (group_id, rev, kind, name, amount, payer_id, category,
@@ -103,7 +120,8 @@ class Repo:
             raise ValueError("轉帳金額必須為正整數")
         if from_id == to_id:
             raise ValueError("轉出方與轉入方不可相同")
-        with self.conn:
+        self._assert_members(group_id, {from_id, to_id})
+        with self._write_lock, self.conn:
             cur = self.conn.execute(
                 """INSERT INTO entries
                    (group_id, rev, kind, name, amount, payer_id, payee_id,
@@ -128,7 +146,8 @@ class Repo:
         if (row is None or row["kind"] != "expense" or row["deleted_at"]
                 or (group_id is not None and row["group_id"] != group_id)):
             raise ValueError(f"找不到可編輯的支出分錄 {entry_id}")
-        with self.conn:
+        self._assert_members(row["group_id"], {payer_id} | set(allocations))
+        with self._write_lock, self.conn:
             self.conn.execute(
                 """UPDATE entries SET rev = ?, name = ?, amount = ?,
                    payer_id = ?, category = ?, note = ?,
@@ -150,7 +169,7 @@ class Repo:
         if (row is None or row["deleted_at"]
                 or (group_id is not None and row["group_id"] != group_id)):
             raise ValueError(f"找不到分錄 {entry_id}")
-        with self.conn:
+        with self._write_lock, self.conn:
             self.conn.execute(
                 """UPDATE entries SET rev = ?,
                    deleted_at = datetime('now', 'localtime')
@@ -195,10 +214,10 @@ class Repo:
     # -- snapshots ----------------------------------------------------
     def create_snapshot(self, group_id: int, lines: list[SettlementLine],
                         created_by: int | None = None) -> int:
-        row = self.conn.execute(
-            "SELECT COALESCE(MAX(rev), 0) AS r FROM entries WHERE group_id = ?",
-            (group_id,)).fetchone()
-        with self.conn:
+        with self._write_lock, self.conn:
+            row = self.conn.execute(
+                "SELECT COALESCE(MAX(rev), 0) AS r FROM entries "
+                "WHERE group_id = ?", (group_id,)).fetchone()
             cur = self.conn.execute(
                 "INSERT INTO snapshots (group_id, through_rev, created_by) "
                 "VALUES (?, ?, ?)",

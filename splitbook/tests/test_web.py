@@ -252,3 +252,60 @@ def test_snapshot_requires_login():
     _setup_group(c)
     r = c.post("/settlement/snapshot", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login"
+
+
+def _two_group_client():
+    """group-1 成員 1~3（登入 id=1），group-2 成員 id=4。"""
+    c = _logged_in_client()
+    c.post("/expenses", data={
+        "name": "民宿", "category": "住宿", "amount": 300, "payer_id": 1,
+        "split_kind": "equal"})
+    c.post("/setup", data={"group_name": "北海道行", "member1": "阿強"},
+           follow_redirects=False)
+    return c
+
+
+def test_foreign_payer_on_post_expense_shows_error_no_leak():
+    c = _two_group_client()
+    # group-1 成員（登入 id=1）用 group-2 成員 id=4 當付款人
+    r = c.post("/expenses", data={
+        "name": "偷渡", "category": "雜支", "amount": 300, "payer_id": 4,
+        "split_kind": "equal"})
+    assert r.status_code == 200
+    assert "不屬於此帳本" in r.text
+    assert "偷渡" not in r.text
+    # 帳目乾淨：home 仍 200 且無錯誤橫幅（守恆不變量未被污染）
+    home = c.get("/")
+    assert home.status_code == 200
+    assert "alert" not in home.text
+
+
+def test_foreign_from_id_on_post_transfer_shows_error_no_500():
+    c = _two_group_client()
+    r = c.post("/transfers", data={
+        "from_id": 4, "to_id": 1, "amount": 100})
+    assert r.status_code == 200
+    assert "不屬於此帳本" in r.text
+
+
+def test_settlement_pay_foreign_from_id_redirects_no_payment():
+    c = _two_group_client()
+    r = c.post("/settlement/snapshot", follow_redirects=False)
+    assert r.status_code == 303
+    before = c.get("/settlement").text
+    r2 = c.post("/settlement/pay", data={
+        "from_id": 4, "to_id": 1, "amount": 100, "snapshot_id": 1},
+        follow_redirects=False)
+    assert r2.status_code == 303 and r2.headers["location"] == "/settlement"
+    after = c.get("/settlement").text
+    assert "已記錄的付款" not in after
+    assert before == after
+
+
+def test_zero_amount_expense_shows_error_no_500():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "免費", "category": "雜支", "amount": 0, "payer_id": 1,
+        "split_kind": "equal"})
+    assert r.status_code == 200
+    assert "金額不可為 0" in r.text

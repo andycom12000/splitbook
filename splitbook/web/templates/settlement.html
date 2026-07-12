@@ -16,7 +16,7 @@
     <form method="post" action="/settlement/snapshot">
       <button type="submit">凍結此方案（建立快照）</button>
     </form>
-  {% else %}
+  {% elif not error %}
     <p class="muted">目前已結清，沒有需要的轉帳。</p>
   {% endif %}
 </section>
