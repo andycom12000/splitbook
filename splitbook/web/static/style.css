@@ -31,7 +31,7 @@
   --member-2: oklch(56% 0.115 165);
   --member-3: oklch(70% 0.125 85);
   --member-4: oklch(58% 0.115 340);
-  --member-5: oklch(65% 0.095 220);
+  --member-5: oklch(57% 0.095 220);
 
   --ok: oklch(53% 0.115 155);
   --warn: oklch(52% 0.110 75);
@@ -282,7 +282,7 @@ legend { font-size: var(--text-sm); color: var(--ink-muted); padding: 0; margin-
 }
 .avatar.member-1 { background: var(--member-1); }
 .avatar.member-2 { background: var(--member-2); }
-.avatar.member-3 { background: var(--member-3); }
+.avatar.member-3 { background: var(--member-3); color: oklch(28% 0.03 85); }
 .avatar.member-4 { background: var(--member-4); }
 .avatar.member-5 { background: var(--member-5); }
 .member-pill { display: inline-flex; align-items: center; gap: 6px; }
@@ -573,4 +573,18 @@ legend { font-size: var(--text-sm); color: var(--ink-muted); padding: 0; margin-
       "shopping recent";
     align-content: start;
   }
+
+  /* 帳目列在寬螢幕收成單行 */
+  .entry-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "main side"
+      "extra extra";
+    align-items: baseline;
+    column-gap: var(--sp-6);
+  }
+  .entry-main { grid-area: main; }
+  .entry-side { grid-area: side; margin-top: 0; }
+  .entry-extra { grid-area: extra; }
 }
