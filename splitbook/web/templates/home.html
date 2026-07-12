@@ -1,0 +1,23 @@
+<!-- splitbook/web/templates/home.html -->
+{% extends "base.html" %}
+{% block title %}{{ group['name'] }} — SplitBook{% endblock %}
+{% block content %}
+<h1>{{ group['name'] }}</h1>
+<p class="muted">總支出 ${{ "{:,}".format(total_expense) }}</p>
+<div class="cards">
+  {% for m in members %}
+    {% set b = balances.get(m['id']) %}
+    <div class="card">
+      <h2>{{ m['name'] }}{% if m['id'] == me['id'] %}（我）{% endif %}</h2>
+      {% if b %}
+        <p>代墊 ${{ "{:,}".format(b.advanced) }}／應分攤 ${{ "{:,}".format(b.share) }}</p>
+        <p>已轉出 ${{ "{:,}".format(b.sent) }}／已收到 ${{ "{:,}".format(b.received) }}</p>
+        <p class="net {{ 'pos' if b.net > 0 else 'neg' if b.net < 0 else '' }}">
+          淨額 ${{ "{:,}".format(b.net) }}
+          {% if b.net > 0 %}（應收回）{% elif b.net < 0 %}（應付）{% else %}（已結清）{% endif %}
+        </p>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

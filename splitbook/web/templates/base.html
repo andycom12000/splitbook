@@ -1,0 +1,30 @@
+<!-- splitbook/web/templates/base.html -->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SplitBook{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">SplitBook</span>
+    {% if me is defined and me %}
+      <nav>
+        <a href="/" class="{{ 'on' if active_tab == 'home' }}">成員</a>
+        <a href="/expenses" class="{{ 'on' if active_tab == 'expenses' }}">帳目</a>
+        <a href="/transfers" class="{{ 'on' if active_tab == 'transfers' }}">轉帳</a>
+        <a href="/settlement" class="{{ 'on' if active_tab == 'settlement' }}">結算</a>
+      </nav>
+      <form method="post" action="/logout" class="inline">
+        <button class="ghost">{{ me['name'] }}・登出</button>
+      </form>
+    {% endif %}
+  </header>
+  <main>
+    {% if error is defined and error %}<div class="alert">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

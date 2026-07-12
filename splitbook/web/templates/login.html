@@ -1,0 +1,23 @@
+<!-- splitbook/web/templates/login.html -->
+{% extends "base.html" %}
+{% block title %}登入 — SplitBook{% endblock %}
+{% block content %}
+<h1>選擇你的身分</h1>
+<form method="post" action="/login" class="card">
+  {% for g in groups %}
+    <fieldset>
+      <legend>{{ g.group['name'] }}</legend>
+      {% for m in g.members %}
+        <label class="radio">
+          <input type="radio" name="member_id" value="{{ m['id'] }}" required>
+          {{ m['name'] }}{% if m['pin_hash'] is none %}（尚未設定 PIN）{% endif %}
+        </label>
+      {% endfor %}
+    </fieldset>
+  {% endfor %}
+  <label>PIN <input name="pin" type="password" inputmode="numeric"
+         placeholder="第一次登入即設定 PIN"></label>
+  <button type="submit">登入</button>
+</form>
+<p><a href="/setup">＋ 建立新帳本</a></p>
+{% endblock %}
