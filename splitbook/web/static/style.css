@@ -1,0 +1,52 @@
+:root {
+  --bg: #0f172a; --panel: #1e293b; --line: #334155;
+  --text: #e2e8f0; --muted: #94a3b8;
+  --pos: #4ade80; --neg: #f87171; --accent: #38bdf8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Fira Sans", "Noto Sans TC", system-ui, sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: .75rem 1rem; background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; color: var(--accent); }
+.topbar nav { display: flex; gap: .75rem; flex: 1; }
+.topbar a { color: var(--muted); text-decoration: none; padding: .25rem .5rem; }
+.topbar a.on { color: var(--text); border-bottom: 2px solid var(--accent); }
+main { max-width: 56rem; margin: 0 auto; padding: 1rem; }
+h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; } h3 { font-size: 1rem; }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: .5rem; padding: 1rem; margin-bottom: 1rem;
+}
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .75rem; }
+label { display: block; margin: .5rem 0; }
+input, select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: .25rem; padding: .4rem; width: 100%; max-width: 20rem;
+}
+input.short { width: 6rem; }
+.radio { display: inline-flex; align-items: center; gap: .3rem; margin-right: 1rem; }
+.radio input { width: auto; }
+button {
+  background: var(--accent); color: #082f49; border: 0; border-radius: .25rem;
+  padding: .5rem 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem;
+}
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.inline { display: inline; }
+.alert {
+  background: #7f1d1d; border: 1px solid #b91c1c; color: #fecaca;
+  padding: .5rem .75rem; border-radius: .25rem; margin-bottom: 1rem;
+}
+.muted { color: var(--muted); }
+.net.pos { color: var(--pos); } .net.neg { color: var(--neg); }
+table.list, table.split-table { width: 100%; border-collapse: collapse; }
+table.list th, table.list td, table.split-table th, table.split-table td {
+  text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line);
+}
+fieldset { border: 1px solid var(--line); border-radius: .25rem; margin: .5rem 0; }
+ul { padding-left: 1.2rem; } li { margin: .3rem 0; }

@@ -21,3 +21,7 @@ Thumbs.db
 # Demo files (temporary)
 demo-*.html
 screenshot-*.png
+
+# SplitBook database
+splitbook.db
+*.db
