@@ -1,0 +1,8 @@
+fastapi==0.115.*
+uvicorn[standard]==0.34.*
+jinja2==3.1.*
+notion-client==2.2.*
+python-dotenv==1.0.*
+httpx==0.28.*
+pytest==8.*
+python-multipart==0.0.*

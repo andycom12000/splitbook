@@ -1,0 +1,92 @@
+<!-- Overall progress -->
+<div class="bg-bg-card border border-border-def rounded-xl p-4 mb-4">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="text-sm font-semibold text-txt-secondary uppercase tracking-wider">匯款進度</h2>
+    <span class="text-sm font-mono font-semibold text-txt-primary">
+      ${{ "{:,}".format(progress.total_received) }} / ${{ "{:,}".format(progress.total_expected) }}
+    </span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: {{ progress.total_pct }}%"></div>
+  </div>
+  <div class="flex justify-between mt-1 text-xs text-txt-muted">
+    <span>{{ progress.total_pct }}%</span>
+    <span>
+      {% if progress.total_received >= progress.total_expected %}
+      全部完成
+      {% else %}
+      待收 ${{ "{:,}".format(progress.total_expected - progress.total_received) }}
+      {% endif %}
+    </span>
+  </div>
+</div>
+
+<!-- Per-collector cards -->
+{% for c in progress.collectors %}
+<div class="bg-bg-card border border-border-def rounded-xl p-4 mb-3">
+  <!-- Collector header -->
+  <div class="flex items-center justify-between mb-2">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-full bg-green-900/60 border border-green-700/60 flex items-center justify-center
+                  text-xs font-bold text-green-300 flex-shrink-0">
+        {{ c.name[0] }}
+      </div>
+      <span class="text-sm font-semibold text-green-300">{{ c.name }}</span>
+    </div>
+    <span class="text-xs font-mono text-txt-muted">
+      ${{ "{:,}".format(c.received) }} / ${{ "{:,}".format(c.expected) }}
+    </span>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar mb-3">
+    <div class="progress-fill" style="width: {{ c.pct }}%"></div>
+  </div>
+
+  <!-- Payment list -->
+  <div class="space-y-2">
+    {% for p in c.payments %}
+    <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg
+                {% if p.paid %}bg-green-900/20{% else %}bg-bg-base{% endif %}">
+      <div class="flex items-center gap-2 min-w-0">
+        {% if p.paid %}
+        <span class="text-green-400 text-sm flex-shrink-0">&#10003;</span>
+        {% else %}
+        <span class="text-txt-muted text-sm flex-shrink-0">&#9744;</span>
+        {% endif %}
+        <span class="text-sm text-txt-primary truncate">{{ p.from_name }}</span>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span class="text-sm font-mono {% if p.paid %}text-green-400{% else %}text-txt-primary{% endif %}">
+          ${{ "{:,}".format(p.amount) }}
+        </span>
+        {% if p.paid %}
+        <form class="inline" hx-post="/api/payments/{{ p.txn_id }}/undo"
+              hx-target="#payment-progress" hx-swap="innerHTML">
+          <button type="submit"
+            class="px-2 py-1 rounded text-xs font-medium bg-bg-base border border-border-def
+                   text-txt-muted hover:text-red-400 hover:border-red-800
+                   transition-colors duration-150">
+            撤銷
+          </button>
+        </form>
+        {% else %}
+        <form class="inline" hx-post="/api/payments"
+              hx-target="#payment-progress" hx-swap="innerHTML">
+          <input type="hidden" name="from_id" value="{{ p.from_id }}">
+          <input type="hidden" name="to_id" value="{{ p.to_id }}">
+          <input type="hidden" name="amount" value="{{ p.amount }}">
+          <button type="submit"
+            class="px-2 py-1 rounded text-xs font-medium bg-accent-blue/20 border border-accent-blue/40
+                   text-accent-blue hover:bg-accent-blue hover:text-white
+                   transition-colors duration-150">
+            已匯款
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}

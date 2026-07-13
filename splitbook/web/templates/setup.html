@@ -1,0 +1,25 @@
+<!-- splitbook/web/templates/setup.html — 首次進入：建家庭、加成員（自動配識別色） -->
+{% extends "base.html" %}
+{% block title %}建立家庭 — HomeBook{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <h1>先把家建起來</h1>
+  <p class="lede">一本全家共用的帳，記帳、拆帳、月底結算都在這裡。</p>
+  <form method="post" action="/setup" class="auth-form">
+    <label>家庭名稱 <input name="group_name" required placeholder="我們家"></label>
+    <fieldset class="member-inputs">
+      <legend>成員（最多 5 位，之後也能加）</legend>
+      {% for i in range(1, 6) %}
+      <div class="member-input">
+        <span class="avatar {{ member_colors[i - 1] }}" aria-hidden="true">{{ i }}</span>
+        <input name="member{{ i }}" placeholder="{{ '例如：媽媽' if i == 1 else '成員 ' ~ i ~ '（可留白）' }}"
+               {{ 'required' if i == 1 }}>
+      </div>
+      {% endfor %}
+    </fieldset>
+    <p class="muted">每位成員會拿到一個識別色，全站認人就靠它。</p>
+    <button class="btn btn-primary btn-lg" type="submit">建立</button>
+  </form>
+  <p class="muted">建好之後，記得到「定期」把房租、水電這類固定支出加進來，到期會自動提醒。</p>
+</div>
+{% endblock %}

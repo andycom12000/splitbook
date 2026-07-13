@@ -1,0 +1,54 @@
+<!-- splitbook/web/templates/transfers.html — 轉帳與預付（結算的子頁） -->
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}轉帳與預付 — HomeBook{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>轉帳與預付</h1>
+  <a class="btn-ghost" href="/settlement">← 回結算</a>
+</div>
+
+<form method="post" action="/transfers" class="transfer-add">
+  <h2>記一筆轉帳（預付款／還款）</h2>
+  <div class="transfer-fields">
+    <label>轉出
+      <select name="from_id">
+        {% for m in members %}<option value="{{ m['id'] }}" {{ 'selected' if m['id'] == me['id'] }}>{{ m['name'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>轉入
+      <select name="to_id">
+        {% for m in members %}<option value="{{ m['id'] }}">{{ m['name'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>金額 <input name="amount" type="number" inputmode="numeric" min="1" required></label>
+    <label>備註 <input name="note" placeholder="（可留白）"></label>
+  </div>
+  <button class="btn btn-primary" type="submit">記錄</button>
+</form>
+
+<section class="transfer-history">
+  <h2>紀錄</h2>
+  {% if transfers %}
+  <ul class="settle-lines">
+    {% for t in transfers %}
+    <li class="settle-line">
+      <span class="muted">{{ t.date }}</span>
+      {{ ui.member(names.get(t.payer_id, "?"), colors.get(t.payer_id, "member-1")) }}
+      <span class="arrow" aria-hidden="true">→</span>
+      {{ ui.member(names.get(t.payee_id, "?"), colors.get(t.payee_id, "member-1")) }}
+      <span class="num">${{ "{:,}".format(t.amount) }}</span>
+      <span class="tag">{{ "結算轉帳" if t.transfer_kind == "settlement" else "預付款" }}</span>
+      {% if t.note %}<span class="muted">{{ t.note }}</span>{% endif %}
+      <form method="post" action="/transfers/{{ t.id }}/delete" class="inline"
+            onsubmit="return confirm('確定刪除？')">
+        <button class="btn-ghost danger" type="submit">刪除</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-hint">尚未有轉帳。家人先幫忙代繳、或先給一筆預付款，都記在這裡。</p>
+  {% endif %}
+</section>
+{% endblock %}

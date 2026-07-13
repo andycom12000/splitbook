@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}帳目 — TripSplit{% endblock %}
+{% block page_title %}帳目管理{% endblock %}
+
+{% block header_actions %}
+<button
+  hx-get="/htmx/expense-form"
+  hx-target="#modal-container"
+  hx-swap="innerHTML"
+  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-blue text-white text-sm font-medium
+         active:bg-blue-700 transition-colors duration-150">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24"
+       stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+  </svg>
+  新增帳目
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Error Alert -->
+{% if error %}
+<div class="mx-4 mt-4 p-4 bg-red-900/50 border border-red-700 rounded-xl text-red-200 text-sm">
+  Notion 連線錯誤：{{ error }}
+</div>
+{% endif %}
+
+<!-- Summary Banner -->
+{% if expenses %}
+{% set total_amount = expenses | sum(attribute='amount') %}
+<div class="mx-4 lg:mx-6 mt-4 px-4 py-3 bg-bg-card border border-border-def rounded-xl">
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+    <div>
+      <div class="text-xs text-txt-muted mb-0.5">帳目總數</div>
+      <div class="text-2xl font-bold font-mono text-txt-primary">{{ expenses | length }}</div>
+    </div>
+    <div>
+      <div class="text-xs text-txt-muted mb-0.5">總費用</div>
+      <div class="text-2xl font-bold font-mono text-amt-positive">
+        ${{ "{:,}".format(total_amount) }}
+      </div>
+    </div>
+    <div class="hidden lg:block">
+      <div class="text-xs text-txt-muted mb-0.5">最大單筆</div>
+      <div class="text-2xl font-bold font-mono text-txt-primary">
+        ${{ "{:,}".format(expenses | map(attribute='amount') | max) }}
+      </div>
+    </div>
+    <div class="hidden lg:block">
+      <div class="text-xs text-txt-muted mb-0.5">平均每筆</div>
+      <div class="text-2xl font-bold font-mono text-txt-primary">
+        ${{ "{:,}".format((total_amount // (expenses | length)) if expenses else 0) }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Expense List -->
+<div class="px-4 lg:px-6 mt-4 pb-4">
+
+  {% if not expenses %}
+  <!-- Empty State -->
+  <div class="flex flex-col items-center justify-center py-20 text-center">
+    <div class="w-16 h-16 rounded-2xl bg-bg-card border border-border-def flex items-center justify-center mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-txt-muted" fill="none" viewBox="0 0 24 24"
+           stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    </div>
+    <p class="text-txt-secondary font-medium mb-1">尚未新增帳目</p>
+    <p class="text-txt-muted text-sm mb-5">點擊右上角按鈕開始記帳</p>
+    <button
+      hx-get="/htmx/expense-form"
+      hx-target="#modal-container"
+      hx-swap="innerHTML"
+      class="px-5 py-2.5 rounded-xl bg-accent-blue text-white text-sm font-semibold
+             hover:bg-blue-500 active:bg-blue-700 transition-colors duration-150">
+      新增第一筆帳目
+    </button>
+  </div>
+
+  {% else %}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+  {% set category_colors = {
+    "民宿": ("bg-blue-900/60 text-blue-300", "宿"),
+    "餐費": ("bg-orange-900/60 text-orange-300", "餐"),
+    "保險": ("bg-green-900/60 text-green-300", "保"),
+    "酒水": ("bg-purple-900/60 text-purple-300", "酒"),
+    "雜支": ("bg-gray-700/60 text-gray-300", "雜"),
+  } %}
+
+  {% for exp in expenses %}
+  {% set cat_style = category_colors.get(exp.category, ("bg-gray-700/60 text-gray-300", exp.category[0] if exp.category else "?")) %}
+  <div class="bg-bg-card border border-border-def rounded-xl p-4 hover:border-txt-muted/30 transition-colors duration-150">
+
+    <!-- Top row: icon + name + amount -->
+    <div class="flex items-start gap-3">
+      <!-- Category circle -->
+      <div class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm {{ cat_style[0] }}">
+        {{ cat_style[1] }}
+      </div>
+
+      <!-- Name + meta -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-baseline justify-between gap-2">
+          <span class="text-sm font-semibold text-txt-primary truncate">{{ exp.name }}</span>
+          <span class="flex-shrink-0 text-base font-bold font-mono text-txt-primary">
+            ${{ "{:,}".format(exp.amount) }}
+          </span>
+        </div>
+        <div class="flex items-center gap-2 mt-0.5 text-xs text-txt-muted">
+          <span>{{ exp.category }}</span>
+          <span class="text-border-def">·</span>
+          <span>付款：{{ exp.payer_name }}</span>
+          {% if exp.date %}
+          <span class="text-border-def">·</span>
+          <span>{{ exp.date }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Split info row -->
+    {% if exp.participant_count > 0 %}
+    <div class="mt-3 pt-3 border-t border-border-def flex items-center justify-between text-xs">
+      <span class="text-txt-muted">{{ exp.participant_count }} 人均攤</span>
+      <span class="font-mono font-semibold text-amt-positive">
+        每人 ${{ "{:,}".format(exp.per_person) }}
+      </span>
+    </div>
+    {% endif %}
+
+    <!-- Tags row -->
+    {% if exp.tags %}
+    <div class="mt-2 flex flex-wrap gap-1">
+      {% for tag in exp.tags %}
+      <span class="px-2 py-0.5 rounded-full text-xs bg-bg-base border border-border-def text-txt-muted">
+        {{ tag }}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Note -->
+    {% if exp.note %}
+    <div class="mt-2 text-xs text-txt-muted italic">{{ exp.note }}</div>
+    {% endif %}
+
+    <!-- Action buttons -->
+    <div class="mt-3 pt-3 border-t border-border-def flex gap-2 justify-end">
+      <button
+        hx-get="/htmx/expense-form?id={{ exp.id }}"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium bg-bg-base border border-border-def
+               text-txt-secondary hover:text-txt-primary hover:border-txt-muted
+               active:bg-gray-700 transition-colors duration-150">
+        編輯
+      </button>
+      <form method="POST" action="/api/expenses/{{ exp.id }}/delete" class="inline">
+        <button type="submit"
+          onclick="return confirm('確定要刪除「{{ exp.name }}」嗎？')"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium bg-bg-base border border-red-800
+                 text-red-400 hover:bg-red-900/30 hover:border-red-600
+                 active:bg-red-900/50 transition-colors duration-150">
+          刪除
+        </button>
+      </form>
+    </div>
+
+  </div>
+  {% endfor %}
+  </div><!-- /grid -->
+
+  {% endif %}
+</div>
+
+<!-- Modal container — htmx renders the expense form here -->
+<div id="modal-container"></div>
+
+{% endblock %}

@@ -1,0 +1,55 @@
+<!-- splitbook/web/templates/expenses.html — 帳目（依日分組） -->
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}帳目 — HomeBook{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>帳目</h1>
+  <nav class="month-nav" aria-label="月份">
+    <a href="/expenses?month={{ prev_month }}" aria-label="上個月">←</a>
+    <strong>{{ month_num }} 月</strong>
+    <a href="/expenses?month={{ next_month }}" aria-label="下個月">→</a>
+  </nav>
+</div>
+<p class="lede">
+  {% if day_groups %}這個月共 {{ ui.money(month_total) }}。
+  {% elif is_current %}這個月還沒有帳，右下角「＋記一筆」開始。
+  {% else %}這個月沒有帳目。{% endif %}
+</p>
+
+{% for d, items in day_groups %}
+<section class="day-group">
+  <h2 class="day-label">{{ date_label(d) }}</h2>
+  <ul class="entry-rows">
+    {% for e in items %}
+    <li class="entry-row">
+      <div class="entry-main">
+        <span class="entry-name">{{ e.name }}</span>
+        {% if e.category %}<span class="tag">{{ e.category }}</span>{% endif %}
+        {% if e.note %}<span class="muted entry-note">{{ e.note }}</span>{% endif %}
+      </div>
+      <div class="entry-side">
+        {{ ui.member(names.get(e.payer_id, "?"), colors.get(e.payer_id, "member-1")) }}
+        <span class="num entry-amount">${{ "{:,}".format(e.amount) }}</span>
+      </div>
+      <details class="entry-extra">
+        <summary aria-label="{{ e.name }} 的分攤與操作">分攤</summary>
+        <p class="muted">
+          {% for mid, a in e.allocations.items() -%}
+            {{ names.get(mid, "?") }} ${{ "{:,}".format(a) }}{{ "、" if not loop.last }}
+          {%- endfor %}
+        </p>
+        <div class="row-actions">
+          <a class="btn-ghost" href="/expenses?edit={{ e.id }}">編輯</a>
+          <form method="post" action="/expenses/{{ e.id }}/delete" class="inline"
+                onsubmit="return confirm('確定刪除？')">
+            <button class="btn-ghost danger" type="submit">刪除</button>
+          </form>
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}

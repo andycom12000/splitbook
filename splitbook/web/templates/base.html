@@ -1,0 +1,58 @@
+<!-- splitbook/web/templates/base.html -->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}HomeBook{% endblock %}</title>
+  <link rel="preload" href="/static/fonts/LINESeedTW_Rg.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  {% set logged_in = me is defined and me %}
+  <header class="topbar">
+    <a class="brand" href="{{ '/' if logged_in else '/login' }}">HomeBook</a>
+    {% if logged_in %}
+      <nav class="topnav" aria-label="主導覽">
+        <a href="/" {% if active_tab == 'home' %}aria-current="page"{% endif %}>總覽</a>
+        <a href="/expenses" {% if active_tab == 'expenses' %}aria-current="page"{% endif %}>帳目</a>
+        <a href="/list" {% if active_tab == 'list' %}aria-current="page"{% endif %}>清單</a>
+        <a href="/recurring" {% if active_tab == 'recurring' %}aria-current="page"{% endif %}>定期</a>
+        <a href="/settlement" {% if active_tab == 'settlement' %}aria-current="page"{% endif %}>結算</a>
+      </nav>
+      <form method="post" action="/logout" class="inline">
+        <button class="btn-ghost whoami" type="submit">{{ me['name'] }}・登出</button>
+      </form>
+    {% endif %}
+  </header>
+  <main>
+    {% if error is defined and error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% if logged_in %}
+  <nav class="tabbar" aria-label="主導覽">
+    <a href="/" {% if active_tab == 'home' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg>
+      <span>總覽</span></a>
+    <a href="/expenses" {% if active_tab == 'expenses' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+      <span>帳目</span></a>
+    <a href="/list" {% if active_tab == 'list' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h2l2 10h9l2-8H7"/><circle cx="9.5" cy="20" r="1"/><circle cx="16.5" cy="20" r="1"/></svg>
+      <span>清單</span></a>
+    <a href="/recurring" {% if active_tab == 'recurring' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 4v4h-4M20 15a8 8 0 0 1-14 3l-2-2M4 20v-4h4"/></svg>
+      <span>定期</span></a>
+    <a href="/settlement" {% if active_tab == 'settlement' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M12 5l6 2-2 6a4 4 0 0 1-4 0zM12 5L6 7l2 6a4 4 0 0 0 4 0z" transform="translate(0 -1)"/></svg>
+      <span>結算</span></a>
+  </nav>
+  {% if show_fab is not defined or show_fab %}
+  <a class="fab" href="/expenses/new" aria-label="記一筆">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  </a>
+  {% endif %}
+  {% endif %}
+</body>
+</html>

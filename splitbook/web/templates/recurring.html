@@ -1,0 +1,119 @@
+<!-- splitbook/web/templates/recurring.html — 定期項目（房租、水電瓦斯、網路…） -->
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}定期 — HomeBook{% endblock %}
+{% block content %}
+<h1>該繳的</h1>
+
+{% if due %}
+<div class="due-cards">
+  {% for t in due %}
+  <article class="due-card">
+    <div class="due-head">
+      <strong>{{ t['name'] }}</strong>
+      <span class="due-when">
+        {% if due_days[t['id']] > 0 %}逾期 {{ due_days[t['id']] }} 天
+        {% else %}今天到期{% endif %}
+      </span>
+    </div>
+    {% if t['amount'] %}
+      <p class="due-amount num">${{ "{:,}".format(t['amount']) }}</p>
+    {% else %}
+      <p class="due-amount muted">{{ t['name'] }}帳單來了嗎？這期金額入帳時填</p>
+    {% endif %}
+    <div class="due-actions">
+      <a class="btn btn-primary" href="/expenses/new?template={{ t['id'] }}&back=/recurring">確認入帳</a>
+      <form method="post" action="/recurring/{{ t['id'] }}/skip" class="inline">
+        <input type="hidden" name="back" value="/recurring">
+        <button class="btn-ghost" type="submit">跳過本期</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if upcoming %}
+<section class="tpl-section">
+  <h2>接下來</h2>
+  <ul class="tpl-rows">
+    {% for t in upcoming %}
+    <li class="tpl-row">
+      <div class="tpl-main">
+        <span class="tpl-name">{{ t['name'] }}</span>
+        <span class="muted">{{ cycle_labels[t['cycle']] }}・下次 {{ t['next_due'][5:7] | int }}/{{ t['next_due'][8:10] | int }}</span>
+      </div>
+      <div class="tpl-side">
+        {% if t['amount'] %}<span class="num">${{ "{:,}".format(t['amount']) }}</span>
+        {% else %}<span class="muted">每期填</span>{% endif %}
+        {{ ui.avatar(names.get(t['payer_id'], "?"), colors.get(t['payer_id'], "member-1")) }}
+        <form method="post" action="/recurring/{{ t['id'] }}/toggle" class="inline">
+          <button class="btn-ghost" type="submit">停用</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if not due and not upcoming and not inactive %}
+<p class="empty-hint">還沒有定期項目。房租、電費、網路這類固定支出加進來，到期會在總覽提醒你，一鍵入帳。</p>
+{% endif %}
+
+<details class="add-form" {{ 'open' if not due and not upcoming }}>
+  <summary>＋ 新增定期項目</summary>
+  <form method="post" action="/recurring/add" class="tpl-add">
+    <label>名稱 <input name="name" required placeholder="房租、電費、網路…"></label>
+    <label>金額 <input name="amount" type="number" inputmode="numeric" min="1"
+           placeholder="留白 = 每期填（例如電費）"></label>
+    <fieldset class="chips">
+      <legend>類別</legend>
+      {% for c in categories %}
+      <label class="chip">
+        <input type="radio" name="category" value="{{ c }}" {{ 'checked' if c == '居住' }}>
+        <span>{{ c }}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <fieldset class="chips payer-chips">
+      <legend>通常誰付</legend>
+      {% for m in members %}
+      <label class="chip chip-member">
+        <input type="radio" name="payer_id" value="{{ m['id'] }}"
+               {{ 'checked' if m['id'] == me['id'] }}>
+        <span>{{ ui.avatar(m['name'], m['color']) }}{{ m['name'] }}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <div class="tpl-cycle">
+      <label>週期
+        <select name="cycle">
+          <option value="monthly">每月</option>
+          <option value="bimonthly">每兩月（水電）</option>
+          <option value="yearly">每年</option>
+        </select>
+      </label>
+      <label>下次到期日 <input name="next_due" type="date" required value="{{ today }}"></label>
+    </div>
+    <p class="muted">入帳或跳過都會自動推進到下一期，全家均分。</p>
+    <button class="btn btn-primary" type="submit">加入</button>
+  </form>
+</details>
+
+{% if inactive %}
+<section class="tpl-section inactive">
+  <h2>已停用</h2>
+  <ul class="tpl-rows">
+    {% for t in inactive %}
+    <li class="tpl-row muted">
+      <span class="tpl-name">{{ t['name'] }}</span>
+      <form method="post" action="/recurring/{{ t['id'] }}/toggle" class="inline">
+        <button class="btn-ghost" type="submit">啟用</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
