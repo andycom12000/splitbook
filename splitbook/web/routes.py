@@ -75,7 +75,8 @@ def _days_overdue(next_due: str, today: str) -> int:
 @router.get("/setup")
 def setup_page(request: Request):
     return templates.TemplateResponse(
-        "setup.html", {"request": request, "member_colors": MEMBER_COLORS})
+        request, "setup.html",
+        {"request": request, "member_colors": MEMBER_COLORS})
 
 
 @router.post("/setup")
@@ -87,7 +88,7 @@ def setup_submit(request: Request, group_name: str = Form(...),
     names = [n.strip() for n in
              (member1, member2, member3, member4, member5) if n.strip()]
     if not group_name.strip() or not names:
-        return templates.TemplateResponse("setup.html", {
+        return templates.TemplateResponse(request, "setup.html", {
             "request": request, "member_colors": MEMBER_COLORS,
             "error": "請填寫家庭名稱與至少一位成員"})
     gid = repo.create_group(group_name.strip())
@@ -110,7 +111,7 @@ def _login_context(request, repo, error=""):
 def login_page(request: Request):
     repo = request.app.state.repo
     return templates.TemplateResponse(
-        "login.html", _login_context(request, repo))
+        request, "login.html", _login_context(request, repo))
 
 
 @router.post("/login")
@@ -120,16 +121,16 @@ def login_submit(request: Request, member_id: int = Form(...),
     member = repo.get_member(member_id)
     if member is None or not member["active"]:
         return templates.TemplateResponse(
-            "login.html", _login_context(request, repo, "找不到成員"))
+            request, "login.html", _login_context(request, repo, "找不到成員"))
     if member["pin_hash"] is None:
         if len(pin) < 4:
             return templates.TemplateResponse(
-                "login.html",
+                request, "login.html",
                 _login_context(request, repo, "第一次登入請設定 PIN（至少 4 碼）"))
         repo.set_pin_hash(member_id, hash_pin(pin))
     elif not verify_pin(pin, member["pin_hash"]):
         return templates.TemplateResponse(
-            "login.html", _login_context(request, repo, "PIN 錯誤"))
+            request, "login.html", _login_context(request, repo, "PIN 錯誤"))
     token = make_token(member["group_id"], member_id,
                        request.app.state.secret)
     resp = _redirect("/")
@@ -176,7 +177,7 @@ def home(request: Request):
     shopping = repo.list_open_items(gid)
     recent = sorted((e for e in entries if e.kind == "expense"),
                     key=lambda e: (e.date, e.id), reverse=True)[:5]
-    return templates.TemplateResponse("home.html", {
+    return templates.TemplateResponse(request, "home.html", {
         "request": request, "me": me, "group": repo.get_group(gid),
         "members": mviews, "colors": _colors(mviews),
         "names": {m["id"]: m["name"] for m in members},
@@ -233,7 +234,7 @@ def expenses_page(request: Request):
         except (TypeError, ValueError):
             editing = None
         return templates.TemplateResponse(
-            "expense_form.html",
+            request, "expense_form.html",
             _form_context(request, repo, gid, me, editing=editing))
     month = request.query_params.get("month") or _today()[:7]
     members = repo.list_members(gid)
@@ -247,7 +248,7 @@ def expenses_page(request: Request):
             day_groups[-1][1].append(e)
         else:
             day_groups.append((e.date, [e]))
-    return templates.TemplateResponse("expenses.html", {
+    return templates.TemplateResponse(request, "expenses.html", {
         "request": request, "me": me, "members": mviews,
         "colors": _colors(mviews),
         "names": {m["id"]: m["name"] for m in members},
@@ -276,7 +277,7 @@ def expense_new_page(request: Request):
             template = None
     back = request.query_params.get("back", "")
     return templates.TemplateResponse(
-        "expense_form.html",
+        request, "expense_form.html",
         _form_context(request, repo, gid, me, template=template, back=back))
 
 
@@ -291,7 +292,7 @@ async def _handle_expense_form(request, entry_id: int | None):
     def _fail(msg, template=None):
         editing = repo.get_entry(entry_id, gid) if entry_id else None
         return templates.TemplateResponse(
-            "expense_form.html",
+            request, "expense_form.html",
             _form_context(request, repo, gid, me, editing=editing,
                           template=template, error=msg, back=back))
 
@@ -340,7 +341,7 @@ def delete_expense_route(request: Request, eid: int):
         repo.soft_delete_entry(eid, gid)
     except ValueError as e:
         return templates.TemplateResponse(
-            "expense_form.html",
+            request, "expense_form.html",
             _form_context(request, repo, gid, me, error=str(e)))
     return _redirect("/expenses")
 
@@ -380,7 +381,7 @@ def shopping_page(request: Request):
         return _redirect("/login")
     repo, gid, me = session
     return templates.TemplateResponse(
-        "shopping.html", _shopping_context(request, repo, gid, me))
+        request, "shopping.html", _shopping_context(request, repo, gid, me))
 
 
 @router.post("/list/add")
@@ -396,7 +397,7 @@ def shopping_add(request: Request, name: str = Form(...),
                                estimate=est, note=note.strip())
     except (ValueError, sqlite3.IntegrityError) as e:
         return templates.TemplateResponse(
-            "shopping.html",
+            request, "shopping.html",
             _shopping_context(request, repo, gid, me, error=str(e)))
     return _redirect("/list")
 
@@ -430,7 +431,7 @@ async def shopping_buy(request: Request):
         repo.mark_items_bought(gid, item_ids, eid)
     except (SplitError, ValueError, KeyError, sqlite3.IntegrityError) as e:
         return templates.TemplateResponse(
-            "shopping.html",
+            request, "shopping.html",
             _shopping_context(request, repo, gid, me, error=str(e)))
     return _redirect("/list")
 
@@ -445,7 +446,7 @@ def shopping_delete(request: Request, iid: int):
         repo.delete_shopping_item(iid, gid)
     except ValueError as e:
         return templates.TemplateResponse(
-            "shopping.html",
+            request, "shopping.html",
             _shopping_context(request, repo, gid, me, error=str(e)))
     return _redirect("/list")
 
@@ -481,7 +482,7 @@ def recurring_page(request: Request):
         return _redirect("/login")
     repo, gid, me = session
     return templates.TemplateResponse(
-        "recurring.html", _recurring_context(request, repo, gid, me))
+        request, "recurring.html", _recurring_context(request, repo, gid, me))
 
 
 @router.post("/recurring/add")
@@ -501,7 +502,7 @@ def recurring_add(request: Request, name: str = Form(...),
                           category=category)
     except (ValueError, sqlite3.IntegrityError) as e:
         return templates.TemplateResponse(
-            "recurring.html",
+            request, "recurring.html",
             _recurring_context(request, repo, gid, me, error=str(e)))
     return _redirect("/recurring")
 
@@ -516,7 +517,7 @@ def recurring_skip(request: Request, tid: int, back: str = Form("")):
         repo.advance_template(tid, gid)
     except ValueError as e:
         return templates.TemplateResponse(
-            "recurring.html",
+            request, "recurring.html",
             _recurring_context(request, repo, gid, me, error=str(e)))
     return _redirect(back if back in SAFE_BACK else "/recurring")
 
@@ -554,7 +555,7 @@ def transfers_page(request: Request):
         return _redirect("/login")
     repo, gid, me = session
     return templates.TemplateResponse(
-        "transfers.html", _transfers_context(request, repo, gid, me))
+        request, "transfers.html", _transfers_context(request, repo, gid, me))
 
 
 @router.post("/transfers")
@@ -570,7 +571,7 @@ def create_transfer_route(request: Request, from_id: int = Form(...),
                              name="預付款", note=note, created_by=me["id"])
     except (ValueError, sqlite3.IntegrityError) as e:
         return templates.TemplateResponse(
-            "transfers.html",
+            request, "transfers.html",
             _transfers_context(request, repo, gid, me, error=str(e)))
     return _redirect("/transfers")
 
@@ -585,7 +586,7 @@ def delete_transfer_route(request: Request, eid: int):
         repo.soft_delete_entry(eid, gid)
     except ValueError as e:
         return templates.TemplateResponse(
-            "transfers.html",
+            request, "transfers.html",
             _transfers_context(request, repo, gid, me, error=str(e)))
     return _redirect("/transfers")
 
@@ -625,7 +626,7 @@ def settlement_page(request: Request):
             "unplanned": unplanned,
             "payments": payments,
         }
-    return templates.TemplateResponse("settlement.html", {
+    return templates.TemplateResponse(request, "settlement.html", {
         "request": request, "me": me, "names": names,
         "colors": _colors(mviews), "plan": plan,
         "snapshot": snapshot_view, "error": error,
