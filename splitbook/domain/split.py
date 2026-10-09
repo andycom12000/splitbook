@@ -45,5 +45,7 @@ def split_exact(amount: int, amounts: dict[int, int]) -> dict[int, int]:
         raise SplitError("至少需要一位參與者")
     total = sum(amounts.values())
     if total != amount:
-        raise SplitError(f"分攤總和 {total} 不等於總金額 {amount}")
+        gap = (f"超出 {total - amount} 元" if total > amount
+               else f"還差 {amount - total} 元")
+        raise SplitError(f"分攤總和 {total} 不等於總金額 {amount}（{gap}）")
     return dict(amounts)

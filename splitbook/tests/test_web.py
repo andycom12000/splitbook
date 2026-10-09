@@ -102,6 +102,40 @@ def test_exact_split_mismatch_shows_error():
     assert "不等於總金額" in r.text
 
 
+def test_exact_split_blank_total_uses_sum_of_amounts():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "門票", "category": "票券", "amount": "", "payer_id": 1,
+        "split_kind": "exact", "x_1": 60, "x_2": 50}, follow_redirects=False)
+    assert r.status_code == 303
+    page = c.get("/expenses")
+    assert "門票" in page.text and "$110" in page.text
+
+
+def test_exact_split_typed_total_still_validated():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "門票", "category": "票券", "amount": 100, "payer_id": 1,
+        "split_kind": "exact", "x_1": 60, "x_2": 30})
+    assert "還差 10 元" in r.text
+    assert "門票" not in c.get("/expenses").text
+
+
+def test_blank_total_rejected_outside_exact_mode():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "晚餐", "category": "餐食", "amount": "", "payer_id": 1,
+        "split_kind": "equal"})
+    assert r.status_code == 200
+    assert "請輸入金額" in r.text
+
+
+def test_expense_form_renders_split_status_hook():
+    c = _logged_in_client()
+    page = c.get("/expenses/new").text
+    assert "data-split-status" in page
+
+
 def test_update_and_delete_expense():
     c = _logged_in_client()
     c.post("/expenses", data={

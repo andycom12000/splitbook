@@ -194,6 +194,16 @@ def home(request: Request):
 
 
 # -- expenses -----------------------------------------------------------
+def parse_amount(form, member_ids: list[int]) -> int:
+    """總額；指定金額模式下總額留白時，以各人指定金額加總作為總額。"""
+    raw = (form.get("amount") or "").strip()
+    if raw:
+        return int(raw)
+    if form.get("split_kind") == "exact":
+        return sum(int(form.get(f"x_{mid}") or 0) for mid in member_ids)
+    raise ValueError("請輸入金額")
+
+
 def parse_split(form, member_ids: list[int], amount: int,
                 payer_id: int) -> dict[int, int]:
     kind = form.get("split_kind", "equal")
@@ -297,9 +307,9 @@ async def _handle_expense_form(request, entry_id: int | None):
                           template=template, error=msg, back=back))
 
     try:
-        amount = int(form["amount"])
-        payer_id = int(form["payer_id"])
         member_ids = [m["id"] for m in repo.list_members(gid)]
+        amount = parse_amount(form, member_ids)
+        payer_id = int(form["payer_id"])
         alloc = parse_split(form, member_ids, amount, payer_id)
         raw_tid = form.get("template_id", "")
         template_id = int(raw_tid) if raw_tid else None
@@ -414,9 +424,9 @@ async def shopping_buy(request: Request):
         items = repo.get_items(gid, item_ids)
         if len(items) != len(item_ids) or not items:
             raise ValueError("清單項目已變動，請重新勾選")
-        amount = int(form["amount"])
-        payer_id = int(form["payer_id"])
         member_ids = [m["id"] for m in repo.list_members(gid)]
+        amount = parse_amount(form, member_ids)
+        payer_id = int(form["payer_id"])
         alloc = parse_split(form, member_ids, amount, payer_id)
         name = (items[0]["name"] if len(items) == 1
                 else f"採買 {len(items)} 項")

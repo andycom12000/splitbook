@@ -419,6 +419,15 @@ legend { font-size: var(--text-sm); color: var(--ink-muted); padding: 0; margin-
   font-weight: 400; padding: var(--sp-1) var(--sp-2);
 }
 .split-table td { padding: var(--sp-1) var(--sp-2); border-top: 1px solid var(--line); }
+.split-status {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3);
+  border-radius: 8px; font-size: var(--text-sm); font-variant-numeric: tabular-nums;
+}
+.split-status[hidden] { display: none; }
+.split-status.is-ok { background: var(--ok-soft); color: var(--ok); }
+.split-status.is-under { background: var(--warn-soft); color: var(--warn); }
+.split-status.is-over { background: var(--danger-soft); color: var(--danger); }
 .qa-meta { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
 .qa-meta label { flex: 1 1 12rem; }
 .qa-actions { display: flex; align-items: center; gap: var(--sp-4); margin-top: var(--sp-8); }

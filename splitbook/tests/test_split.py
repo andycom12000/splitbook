@@ -76,3 +76,10 @@ def test_exact_sum_mismatch_rejected():
         split_exact(100, {1: 60, 2: 50})
     with pytest.raises(SplitError):
         split_exact(100, {})
+
+
+def test_exact_mismatch_message_states_gap():
+    with pytest.raises(SplitError, match="超出 10 元"):
+        split_exact(100, {1: 60, 2: 50})
+    with pytest.raises(SplitError, match="還差 10 元"):
+        split_exact(100, {1: 60, 2: 30})

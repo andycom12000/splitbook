@@ -82,7 +82,11 @@
         {% endfor %}
       </table>
       </div>
-      <p class="muted">均分不勾任何人 = 全家都算。除不盡的零頭，從付款人的下一位開始每人多 1 元。</p>
+      <p class="split-status" data-split-status aria-live="polite" hidden>
+        <span data-split-text></span>
+        <button type="button" class="btn-ghost" data-split-use-sum hidden>改用加總當總額</button>
+      </p>
+      <p class="muted">指定金額：總額留白會以各人金額加總入帳。均分不勾任何人 = 全家都算。除不盡的零頭，從付款人的下一位開始每人多 1 元。</p>
     </details>
   </section>
 
