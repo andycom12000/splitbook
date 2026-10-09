@@ -1,104 +1,143 @@
-<!-- splitbook/web/templates/expense_form.html — quick-add／編輯／定期入帳 -->
+<!-- splitbook/web/templates/expense_form.html — 記一筆／編輯／定期入帳（手機單欄、桌面雙欄） -->
 {% extends "base.html" %}
 {% import "_ui.html" as ui %}
 {% block title %}記一筆 — HomeBook{% endblock %}
 {% block content %}
 {% set cat_value = editing.category if editing else (template['category'] if template else "") %}
-<form method="post" class="quick-add"
+{% set kind = 'exact' if editing else 'equal' %}
+{% set kinds = [('equal', '均分'), ('weights', '依權重'), ('exact', '指定金額')] %}
+<form method="post" class="expense-form" data-split-form
       action="{{ '/expenses/' ~ editing.id ~ '/update' if editing else '/expenses' }}">
-  <h1>
-    {% if editing %}編輯這筆
-    {% elif template %}{{ template['name'] }} 入帳
-    {% else %}記一筆{% endif %}
-  </h1>
+  <div class="ef-head">
+    <a class="btn-ghost" href="{{ back or '/expenses' }}">← 帳目</a>
+    <h1>
+      {% if editing %}編輯這筆
+      {% elif template %}{{ template['name'] }} 入帳
+      {% else %}記一筆{% endif %}
+    </h1>
+  </div>
 
   {% if template %}<input type="hidden" name="template_id" value="{{ template['id'] }}">{% endif %}
   {% if back %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
 
-  <section class="qa-step">
-    <label class="qa-amount-label" for="amount">金額</label>
-    <div class="qa-amount">
-      <span aria-hidden="true">$</span>
-      <input id="amount" name="amount" type="number" inputmode="numeric"
-             required autofocus placeholder="0"
-             value="{{ editing.amount if editing else (template['amount'] or '' if template else '') }}">
-    </div>
-    {% if template and not template['amount'] %}
-    <p class="muted">{{ template['name'] }}帳單來了嗎？這期多少，填上面。</p>
-    {% endif %}
-  </section>
-
-  <section class="qa-step">
-    <label for="name">名稱</label>
-    <input id="name" name="name" required placeholder="晚餐、日用品…"
-           value="{{ editing.name if editing else (template['name'] if template else '') }}">
-    <fieldset class="chips">
-      <legend>類別</legend>
-      {% if cat_value and cat_value not in categories %}
-      <label class="chip"><input type="radio" name="category" value="{{ cat_value }}" checked><span>{{ cat_value }}</span></label>
-      {% endif %}
-      {% for c in categories %}
-      <label class="chip">
-        <input type="radio" name="category" value="{{ c }}"
-               {{ 'checked' if c == cat_value or (not cat_value and not editing and not template and c == '餐食') }}>
-        <span>{{ c }}</span>
-      </label>
+  <div class="ef-layout">
+    <fieldset class="ef-kinds seg">
+      <legend class="visually-hidden">拆帳方式</legend>
+      {% for value, label in kinds %}
+      <label class="seg-opt"><input type="radio" name="split_kind" value="{{ value }}" {{ 'checked' if value == kind }}><span>{{ label }}</span></label>
       {% endfor %}
     </fieldset>
-  </section>
 
-  <section class="qa-step">
-    <fieldset class="chips payer-chips">
-      <legend>誰付的</legend>
-      {% set payer_default = editing.payer_id if editing else (template['payer_id'] if template else me['id']) %}
-      {% for m in members %}
-      <label class="chip chip-member">
-        <input type="radio" name="payer_id" value="{{ m['id'] }}"
-               {{ 'checked' if m['id'] == payer_default }}>
-        <span>{{ ui.avatar(m['name'], m['color']) }}{{ m['name'] }}{% if m['id'] == me['id'] %}（我）{% endif %}</span>
-      </label>
-      {% endfor %}
-    </fieldset>
-    <p class="split-default muted">全家均分。要改分法，展開進階拆帳。</p>
-
-    <details class="advanced-split" {{ 'open' if editing }}>
-      <summary>進階拆帳</summary>
-      <div class="split-kind">
-        <label class="radio"><input type="radio" name="split_kind" value="equal" {{ 'checked' if not editing }}> 均分</label>
-        <label class="radio"><input type="radio" name="split_kind" value="weights"> 依權重</label>
-        <label class="radio"><input type="radio" name="split_kind" value="exact" {{ 'checked' if editing }}> 指定金額</label>
+    <section class="ef-basics card" aria-label="基本資料">
+      <div class="ef-amount">
+        <label for="amount" data-amount-label>金額</label>
+        <div class="qa-amount">
+          <span aria-hidden="true">$</span>
+          <input id="amount" name="amount" type="number" inputmode="numeric"
+                 required autofocus placeholder="0"
+                 value="{{ editing.amount if editing else (template['amount'] or '' if template else '') }}">
+          <span class="badge" data-auto-badge hidden>自動加總</span>
+        </div>
+        <p class="muted nojs-only">指定金額時可留白，會以各人金額加總入帳。</p>
+        {% if template and not template['amount'] %}
+        <p class="muted">{{ template['name'] }}帳單來了嗎？這期多少，填上面。</p>
+        {% endif %}
       </div>
+
+      <div>
+        <label for="name">名稱</label>
+        <input id="name" name="name" required placeholder="晚餐、日用品…"
+               value="{{ editing.name if editing else (template['name'] if template else '') }}">
+      </div>
+
+      <fieldset class="chips">
+        <legend>類別</legend>
+        {% if cat_value and cat_value not in categories %}
+        <label class="chip"><input type="radio" name="category" value="{{ cat_value }}" checked><span>{{ cat_value }}</span></label>
+        {% endif %}
+        {% for c in categories %}
+        <label class="chip">
+          <input type="radio" name="category" value="{{ c }}"
+                 {{ 'checked' if c == cat_value or (not cat_value and not editing and not template and c == '餐食') }}>
+          <span>{{ c }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset class="chips payer-chips">
+        <legend>誰付的</legend>
+        {% set payer_default = editing.payer_id if editing else (template['payer_id'] if template else me['id']) %}
+        {% for m in members %}
+        <label class="chip chip-member">
+          <input type="radio" name="payer_id" value="{{ m['id'] }}"
+                 {{ 'checked' if m['id'] == payer_default }}>
+          <span>{{ ui.avatar(m['name'], m['color']) }}{{ m['name'] }}{% if m['id'] == me['id'] %}（我）{% endif %}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+
+      <div class="qa-meta">
+        <label>日期 <input name="date" type="date"
+               value="{{ editing.date if editing else today }}"></label>
+        <label>備註 <input name="note" value="{{ editing.note if editing }}" placeholder="（可留白）"></label>
+      </div>
+    </section>
+
+    <section class="ef-split card" aria-labelledby="split-title">
+      <h2 id="split-title" data-split-title>怎麼分</h2>
       <div class="table-scroll">
       <table class="split-table">
-        <tr><th>成員</th><th>參與(均分)</th><th>權重</th><th>金額(指定)</th></tr>
+        <thead>
+          <tr>
+            <th>成員</th>
+            <th><span class="only-equal">參與</span><span class="only-weights">份數</span><span class="only-exact">金額</span></th>
+            <th class="col-share">分攤</th>
+            <th class="col-bar">佔比</th>
+          </tr>
+        </thead>
+        <tbody>
         {% for m in members %}
-        <tr>
+        <tr data-member="{{ m['id'] }}">
           <td>{{ ui.member(m['name'], m['color']) }}</td>
-          <td><input type="checkbox" name="p_{{ m['id'] }}" aria-label="{{ m['name'] }} 參與均分"></td>
-          <td><input type="number" name="w_{{ m['id'] }}" min="0" class="short" aria-label="{{ m['name'] }} 權重"></td>
-          <td><input type="number" name="x_{{ m['id'] }}" class="short" aria-label="{{ m['name'] }} 指定金額"
-                value="{{ (editing.allocations.get(m['id'], 0) or '') if editing else '' }}"></td>
+          <td>
+            <label class="only-equal inline-check">
+              <input type="checkbox" name="p_{{ m['id'] }}" checked> 參與
+            </label>
+            <span class="only-weights unit-input">
+              <input type="number" name="w_{{ m['id'] }}" min="0" inputmode="numeric" class="short"
+                     value="1" aria-label="{{ m['name'] }} 份數"> 份
+            </span>
+            <span class="only-exact unit-input">
+              <input type="number" name="x_{{ m['id'] }}" inputmode="numeric" class="short" placeholder="0"
+                     aria-label="{{ m['name'] }} 金額"
+                     value="{{ (editing.allocations.get(m['id'], 0) or '') if editing else '' }}">
+              <button type="button" class="fill-btn" data-fill hidden></button>
+            </span>
+          </td>
+          <td class="col-share num" data-share></td>
+          <td class="col-bar"><span class="bar"><span class="bar-fill {{ m['color'] }}" data-bar></span></span></td>
         </tr>
         {% endfor %}
+        </tbody>
       </table>
       </div>
-      <p class="split-status" data-split-status aria-live="polite" hidden>
-        <span data-split-text></span>
-        <button type="button" class="btn-ghost" data-split-use-sum hidden>改用加總當總額</button>
-      </p>
-      <p class="muted">指定金額：總額留白會以各人金額加總入帳。均分不勾任何人 = 全家都算。除不盡的零頭，從付款人的下一位開始每人多 1 元。</p>
-    </details>
-  </section>
+      <p class="muted" data-split-hint>均分不勾任何人＝全家都算；除不盡的零頭，從付款人的下一位開始每人多 1 元。</p>
 
-  <section class="qa-step qa-meta">
-    <label>日期 <input name="date" type="date"
-           value="{{ editing.date if editing else today }}"></label>
-    <label>備註 <input name="note" value="{{ editing.note if editing }}" placeholder="（可留白）"></label>
-  </section>
+      <div class="receipt only-exact js-only">
+        <label class="inline-check"><input type="checkbox" data-receipt-toggle> 對照收據總額</label>
+        <div class="receipt-row" data-receipt-row hidden>
+          <label for="receipt">收據 $</label>
+          <input id="receipt" type="number" inputmode="numeric" class="short" data-receipt>
+          <span class="pill" data-receipt-pill></span>
+        </div>
+      </div>
 
-  <div class="qa-actions">
-    <button type="submit" class="btn btn-primary btn-lg">{{ "更新" if editing else "記下來" }}</button>
-    <a class="btn-ghost" href="{{ back or '/expenses' }}">取消</a>
+      <div class="ef-actions">
+        <span class="muted kbd-hint js-only">Ctrl + Enter 送出</span>
+        <a class="btn-ghost" href="{{ back or '/expenses' }}">取消</a>
+        <button type="submit" class="btn btn-primary btn-lg" data-submit>{{ "更新" if editing else "記下來" }}</button>
+      </div>
+    </section>
   </div>
 </form>
 {% endblock %}

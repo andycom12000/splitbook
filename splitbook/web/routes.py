@@ -249,6 +249,13 @@ def expenses_page(request: Request):
     month = request.query_params.get("month") or _today()[:7]
     members = repo.list_members(gid)
     mviews = member_views(members)
+    saved = None
+    try:
+        saved = repo.get_entry(int(request.query_params.get("saved", "")), gid)
+    except (TypeError, ValueError):
+        pass
+    if saved is not None and saved.kind != "expense":
+        saved = None
     expenses = [e for e in repo.list_entries(gid)
                 if e.kind == "expense" and e.date[:7] == month]
     expenses.sort(key=lambda e: (e.date, e.id), reverse=True)
@@ -268,6 +275,7 @@ def expenses_page(request: Request):
         "next_month": _shift_month(month, 1),
         "is_current": month == _today()[:7],
         "month_total": sum(e.amount for e in expenses),
+        "saved": saved,
         "error": "", "active_tab": "expenses",
     })
 
@@ -320,15 +328,19 @@ async def _handle_expense_form(request, entry_id: int | None):
             allocations=alloc, category=form.get("category", ""),
             date=form.get("date", ""), note=form.get("note", ""))
         if entry_id is None:
-            repo.record_expense(gid, created_by=me["id"],
-                                template_id=template_id, **kwargs)
+            entry_id = repo.record_expense(gid, created_by=me["id"],
+                                           template_id=template_id, **kwargs)
             if template_id is not None:
                 repo.advance_template(template_id, gid)
         else:
             repo.update_expense(entry_id, group_id=gid, **kwargs)
     except (SplitError, ValueError, KeyError, sqlite3.IntegrityError) as e:
         return _fail(str(e))
-    return _redirect(back if back in SAFE_BACK else "/expenses")
+    if back in SAFE_BACK and back != "/expenses":
+        return _redirect(back)
+    saved = repo.get_entry(entry_id, gid)
+    month = saved.date[:7] if saved else _today()[:7]
+    return _redirect(f"/expenses?month={month}&saved={entry_id}")
 
 
 @router.post("/expenses")

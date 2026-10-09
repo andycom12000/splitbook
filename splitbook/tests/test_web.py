@@ -130,10 +130,43 @@ def test_blank_total_rejected_outside_exact_mode():
     assert "請輸入金額" in r.text
 
 
-def test_expense_form_renders_split_status_hook():
+def test_expense_form_offers_all_split_kinds_with_equal_default():
     c = _logged_in_client()
     page = c.get("/expenses/new").text
-    assert "data-split-status" in page
+    assert "data-split-form" in page
+    assert 'value="equal" checked' in page
+    assert 'value="weights"' in page and 'value="exact"' in page
+    assert page.count('name="p_') == 3 and 'name="p_1" checked' in page
+
+
+def test_saved_expense_redirects_to_list_with_banner_and_highlight():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "門票", "category": "娛樂", "amount": "", "payer_id": 1,
+        "date": "2026-10-09", "split_kind": "exact",
+        "x_1": 60, "x_2": 50, "x_3": 40}, follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/expenses?month=2026-10&saved=1"
+    page = c.get(r.headers["location"]).text
+    assert "已記下 門票 $150" in page
+    assert "小明 $60、小華 $50、小美 $40" in page
+    assert "is-new" in page
+
+
+def test_saved_param_ignores_foreign_or_invalid_ids():
+    c = _logged_in_client()
+    for q in ("abc", "999"):
+        page = c.get(f"/expenses?saved={q}")
+        assert page.status_code == 200
+        assert "已記下" not in page.text
+
+
+def test_back_target_still_wins_over_saved_banner():
+    c = _logged_in_client()
+    r = c.post("/expenses", data={
+        "name": "晚餐", "category": "餐食", "amount": 90, "payer_id": 1,
+        "split_kind": "equal", "back": "/"}, follow_redirects=False)
+    assert r.headers["location"] == "/"
 
 
 def test_update_and_delete_expense():
