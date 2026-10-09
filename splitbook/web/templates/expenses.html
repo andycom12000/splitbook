@@ -11,6 +11,19 @@
     <a href="/expenses?month={{ next_month }}" aria-label="下個月">→</a>
   </nav>
 </div>
+{% if saved %}
+<div class="saved-banner" role="status">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+  <div class="saved-text">
+    <strong>已記下 {{ saved.name }} ${{ "{:,}".format(saved.amount) }}</strong>
+    <span class="muted">{{ names.get(saved.payer_id, "?") }}付 ·
+      {% for mid, a in saved.allocations.items() -%}
+        {{ names.get(mid, "?") }} ${{ "{:,}".format(a) }}{{ "、" if not loop.last }}
+      {%- endfor %}</span>
+  </div>
+  <a class="btn" href="/expenses/new">再記一筆</a>
+</div>
+{% endif %}
 <p class="lede">
   {% if day_groups %}這個月共 {{ ui.money(month_total) }}。
   {% elif is_current %}這個月還沒有帳，右下角「＋記一筆」開始。
@@ -22,7 +35,7 @@
   <h2 class="day-label">{{ date_label(d) }}</h2>
   <ul class="entry-rows">
     {% for e in items %}
-    <li class="entry-row">
+    <li class="entry-row{{ ' is-new' if saved and e.id == saved.id }}">
       <div class="entry-main">
         <span class="entry-name">{{ e.name }}</span>
         {% if e.category %}<span class="tag">{{ e.category }}</span>{% endif %}
